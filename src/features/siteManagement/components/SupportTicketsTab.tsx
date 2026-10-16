@@ -1,13 +1,15 @@
 import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
+// التذاكر وصلت صفوف مسطّحة من portal_tickets وردودها من portal_ticket_reply؛ لا توجد حمولة jsonb.
+// Tickets are flat portal_tickets rows and replies are portal_ticket_reply rows; there is no jsonb payload.
+import type { SupportTicketRow } from '../../../services/siteContentService';
 
 type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
-type TicketReply = { sender?: string; createdAt: string | number | Date; message: string };
-type SupportTicket = { id: string; subject?: string; userName?: string; userEmail?: string; status?: string; message: string; replies?: TicketReply[] };
+
 export interface SupportTicketsTabProps {
   activeTab: SiteTab;
   isAr: boolean;
-  tickets: SupportTicket[];
+  tickets: SupportTicketRow[];
   replyingTicketId: string | null;
   setReplyingTicketId: (id: string | null) => void;
   ticketReplyText: string;

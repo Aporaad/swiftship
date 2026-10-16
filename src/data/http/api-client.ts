@@ -4,6 +4,7 @@ import {
 } from "../../shared/contracts/error.contracts";
 import type { ErrorDetails } from "../../shared/contracts/error.contracts";
 import type { GatewayQuery } from "../contracts/common.gateway";
+import { createAccessTokenRefresher } from "./session-refresh";
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -13,6 +14,9 @@ export interface ApiClientOptions {
   requestIdFactory?: () => string;
   maxReadRetries?: number;
   accessTokenFactory?: () => string | null | undefined;
+  /** يجدد الرمز عند 401 ثم تُعاد المحاولة مرة واحدة — افتراضيًا عبر /auth/refresh المشترك.
+   *  Refreshes the token on a 401 and retries once; defaults to the shared /auth/refresh refresher. */
+  refreshAccessToken?: () => Promise<string | null>;
 }
 
 export class ApiClientError extends ApplicationError {
@@ -22,189 +26,136 @@ export class ApiClientError extends ApplicationError {
   }
 }
 
+interface RequestSpec {
+  path: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  query?: GatewayQuery;
+  body?: unknown;
+  extraHeaders?: Record<string, string>;
+  /** يمنع إعادة التجديد اللانهائية: المحاولة الثانية لا مجددة لها.
+   *  Stops endless refresh loops: the retried attempt never refreshes again. */
+  retried?: boolean;
+}
+
+/** يبني خطأ العقد الموحد من استجابة فاشلة (يشمل تفاصيل التحقق الحقلي).
+ *  Builds the unified contract error from a failed response, including field-level validation issues. */
+async function apiErrorFromResponse(response: Response): Promise<ApiClientError> {
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Non-JSON error responses use the same safe fallback contract.
+  }
+  const fallbackCode = "API_REQUEST_FAILED";
+  const normalized = errorDetailsFromUnknown(body, fallbackCode);
+  const requestId = normalized.requestId ?? response.headers.get("x-request-id") ?? undefined;
+  return new ApiClientError({
+    ...normalized,
+    code: normalized.code || fallbackCode,
+    message:
+      normalized.code === fallbackCode
+        ? `API request failed with status ${response.status}.`
+        : normalized.message,
+    ...(requestId ? { requestId } : {}),
+  });
+}
+
 export class ApiClient {
   private readonly fetchImpl: typeof fetch;
+  private readonly refreshAccessToken: () => Promise<string | null>;
 
   constructor(private readonly options: ApiClientOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.refreshAccessToken =
+      options.refreshAccessToken ?? createAccessTokenRefresher(options.baseUrl);
   }
 
   async get<T>(path: string, query?: GatewayQuery): Promise<T> {
-    const url = new URL(path, this.options.baseUrl);
-    for (const [key, value] of Object.entries(query ?? {})) {
-      if (value !== undefined) url.searchParams.set(key, String(value));
-    }
-
-    const maxRetries = Math.max(0, this.options.maxReadRetries ?? 1);
-    let response: Response | null = null;
-    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        this.options.timeoutMs ?? 10000
-      );
-      try {
-        const accessToken = this.options.accessTokenFactory?.();
-        response = await this.fetchImpl(url, {
-          method: "GET",
-          credentials: this.options.credentials ?? "include",
-          headers: {
-            Accept: "application/json",
-            "x-request-id":
-              this.options.requestIdFactory?.() ?? crypto.randomUUID(),
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (response.ok || response.status < 500 || attempt === maxRetries)
-          break;
-      } catch {
-        clearTimeout(timeout);
-        if (attempt === maxRetries) {
-          throw new ApiClientError({
-            code: "API_REQUEST_FAILED",
-            message: "API request failed.",
-          });
-        }
-      }
-    }
-    if (response === null)
-      throw new ApiClientError({
-        code: "API_REQUEST_FAILED",
-        message: "API request failed.",
-      });
-    if (!response.ok) {
-      let body: unknown = null;
-      try {
-        body = await response.json();
-      } catch {
-        // Non-JSON error responses use the same safe fallback contract.
-      }
-
-      const fallbackCode = "API_REQUEST_FAILED";
-      const normalized = errorDetailsFromUnknown(body, fallbackCode);
-      const requestId =
-        normalized.requestId ??
-        response.headers.get("x-request-id") ??
-        undefined;
-      throw new ApiClientError({
-        ...normalized,
-        code: normalized.code || fallbackCode,
-        message:
-          normalized.code === fallbackCode
-            ? `API request failed with status ${response.status}.`
-            : normalized.message,
-        ...(requestId ? { requestId } : {}),
-      });
-    }
-
-    return response.json() as Promise<T>;
+    return this.request<T>({ path, method: "GET", query });
   }
 
   async post<T>(path: string, body: unknown, extraHeaders: Record<string, string> = {}): Promise<T> {
-    const url = new URL(path, this.options.baseUrl);
-    const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      this.options.timeoutMs ?? 10000
-    );
-    try {
-      const accessToken = this.options.accessTokenFactory?.();
-      const response = await this.fetchImpl(url, {
-        method: "POST",
-        credentials: this.options.credentials ?? "include",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "x-request-id":
-            this.options.requestIdFactory?.() ?? crypto.randomUUID(),
-          ...extraHeaders,
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (!response.ok) {
-        let responseBody: unknown = null;
-        try {
-          responseBody = await response.json();
-        } catch {
-          // Keep the safe API error contract for non-JSON responses.
-        }
-        const normalized = errorDetailsFromUnknown(
-          responseBody,
-          "API_REQUEST_FAILED"
-        );
-        throw new ApiClientError({
-          ...normalized,
-          code: normalized.code || "API_REQUEST_FAILED",
-          message:
-            normalized.message ||
-            `API request failed with status ${response.status}.`,
-        });
-      }
-      return response.json() as Promise<T>;
-    } catch (error) {
-      clearTimeout(timeout);
-      if (error instanceof ApiClientError) throw error;
-      throw new ApiClientError({
-        code: "API_REQUEST_FAILED",
-        message: "API request failed.",
-      });
-    }
+    return this.request<T>({ path, method: "POST", body, extraHeaders });
   }
 
   async patch<T>(path: string, body: unknown): Promise<T> {
-    return this.requestWithBody<T>('PATCH', path, body);
+    return this.request<T>({ path, method: "PATCH", body });
   }
 
   async delete<T>(path: string): Promise<T> {
-    return this.requestWithBody<T>('DELETE', path);
-  }
-  async requestWithBodyForGateway<T>(method: 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
-    return this.requestWithBody<T>(method, path, body);
+    return this.request<T>({ path, method: "DELETE" });
   }
 
-  private async requestWithBody<T>(method: 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
-    const url = new URL(path, this.options.baseUrl);
+  async requestWithBodyForGateway<T>(method: "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+    return this.request<T>({ path, method, body });
+  }
+
+  /** مسار تنفيذ واحد لكل الطلبات: مهلة لكل محاولة، تجديد عند 401، وإعادة محاولة للقراءات عند 5xx.
+   *  One execution path for every request: per-attempt timeout, refresh on 401, and read retry on 5xx. */
+  private async request<T>(spec: RequestSpec): Promise<T> {
+    const url = new URL(spec.path, this.options.baseUrl);
+    for (const [key, value] of Object.entries(spec.query ?? {})) {
+      if (value !== undefined) url.searchParams.set(key, String(value));
+    }
+
+    const response = spec.method === "GET"
+      ? await this.readWithRetries(url, spec)
+      : await this.send(url, spec);
+
+    if (response.ok) return response.json() as Promise<T>;
+
+    // 401: ينجح التجديد فقط إذا ملك العميل refreshToken صالحًا؛ وإلا يظهر الخطأ كما هو.
+    // A 401 is retried only when the refresh genuinely succeeds; otherwise the original error surfaces.
+    if (response.status === 401 && !spec.retried) {
+      const token = await this.refreshAccessToken();
+      if (token) {
+        const retriedResponse = await this.send(url, { ...spec, retried: true });
+        if (retriedResponse.ok) return retriedResponse.json() as Promise<T>;
+        throw await apiErrorFromResponse(retriedResponse);
+      }
+    }
+
+    throw await apiErrorFromResponse(response);
+  }
+
+  private async send(url: URL, spec: RequestSpec): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 10000);
+    const accessToken = this.options.accessTokenFactory?.();
     try {
-      const accessToken = this.options.accessTokenFactory?.();
-      const response = await this.fetchImpl(url, {
-        method,
-        credentials: this.options.credentials ?? 'include',
+      return await this.fetchImpl(url, {
+        method: spec.method,
+        credentials: this.options.credentials ?? "include",
         headers: {
-          Accept: 'application/json',
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-          'x-request-id': this.options.requestIdFactory?.() ?? crypto.randomUUID(),
+          Accept: "application/json",
+          ...(spec.body === undefined ? {} : { "Content-Type": "application/json" }),
+          "x-request-id": this.options.requestIdFactory?.() ?? crypto.randomUUID(),
+          ...spec.extraHeaders,
+          // رمز الجلسة يسبق أي ترويسة إضافية: لا يسمح للعميل بتجاوز المصادقة.
+          // The session token is applied last so a caller cannot override authentication.
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(spec.body === undefined ? {} : { body: JSON.stringify(spec.body) }),
         signal: controller.signal,
       });
+    } finally {
       clearTimeout(timeout);
-      if (!response.ok) {
-        let responseBody: unknown = null;
-        try {
-          responseBody = await response.json();
-        } catch {
-          // Keep the safe API error contract for non-JSON responses.
-        }
-        const normalized = errorDetailsFromUnknown(responseBody, 'API_REQUEST_FAILED');
-        throw new ApiClientError({
-          ...normalized,
-          code: normalized.code || 'API_REQUEST_FAILED',
-          message: normalized.message || `API request failed with status ${response.status}.`,
-        });
-      }
-      return response.json() as Promise<T>;
-    } catch (error) {
-      clearTimeout(timeout);
-      if (error instanceof ApiClientError) throw error;
-      throw new ApiClientError({ code: 'API_REQUEST_FAILED', message: 'API request failed.' });
     }
+  }
+
+  /** القراءات فقط تُعاد محاولتها عند 5xx/انقطاع — الكتابات لا تُكرَّر كي لا تتضاعف العمليات.
+   *  Only reads retry on 5xx/aborts; writes are never repeated so side effects cannot double-apply. */
+  private async readWithRetries(url: URL, spec: RequestSpec): Promise<Response> {
+    const maxRetries = Math.max(0, this.options.maxReadRetries ?? 1);
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      try {
+        const response = await this.send(url, spec);
+        if (response.ok || response.status < 500 || attempt === maxRetries) return response;
+      } catch (error) {
+        if (error instanceof ApiClientError) throw error;
+        if (attempt === maxRetries) throw new ApiClientError({ code: "API_REQUEST_FAILED", message: "API request failed." });
+      }
+    }
+    throw new ApiClientError({ code: "API_REQUEST_FAILED", message: "API request failed." });
   }
 }

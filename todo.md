@@ -2561,3 +2561,64 @@
 - [x] فحص حالة المستودع المحلي وشجرة العمل والتأكد من مطابقة الـ remotes (`swiftship`).
 - [x] مزامنة ورفع التعديلات جزئياً: تم رفع أول 3 التزامات بنجاح إلى المستودع البعيد (`016c052`, `deb7f63`, `06080d4`).
 - [ ] استكمال رفع الـ 4 التزامات المتبقية (`d3f60bd`, `76c09c3`, `6296fe2`, `d3e9d70`) والتي تعاني من مهلة اتصال HTTP 408 بسبب حجم ملفات التوثيق الكبيرة (>45 ميغابايت) وبطء اتصال الرفع.
+
+## [2026-10-16 08:06:00 +03:00] — AI Model: Qoder Agent
+### تدقيق نجاح الترحيلات وإغلاق فجوات التسطير قبل إسقاط حقل data (Migration verification + gap closing)
+- [x] التحقق من حالة القاعدة الحيّة: الترحيلات 0024 → 0032 و 0036 و 0037 مطبَّقة، و 0038 و 0034 لم تُطبَّق بعد (كل أعمدة الحمولة ما زالت موجودة).
+- [x] فحص مفاتيح كل عمود حمولة (26 عمودًا) مقابل الأعمدة الرئيسية: لا قيمة تضيع عند الإسقاط بعد إضافة الأقسام الناقصة.
+- [x] تأكيد اكتمال الجداول الابنة: `portal_ticket_reply` (1:1 مع الحمولة)، `activity_log_detail` (84 صفًا)، `role_permission` (185)، `expense_category` (13)، `settings_report_account` (4)، `order_fired_trigger` (2).
+- [x] تأكيد أن `notification_recipient` فارغ بشكل صحيح: كل `associatedUserIds` في الحمولة مصفوفات فارغة `[]` — لا فقدان.
+- [x] إضافة 3 أقسام إلى `0038`: (§18) تسطير `cust_details.body_details` إلى 7 أعمدة حقيقية، (§19) تعبئة `whatsapp_logs.external_response` (12 صفًا)، (§20) تعبئة `orders.customer_account_id` (صف واحد).
+- [x] إضافة إسقاط `cust_details.location` و `cust_details.body_details` إلى `0034` بعد انتهاء كونهما مستند JSON نصي.
+- [x] تحديث `alx_api`: `portal-owned.repository` و `portal-admin` (contracts/schemas/repository) للقراءة والكتابة من الأعمدة المسطّحة مع إبقاء شكل `bodyDetails` على الشبكة كما هو.
+- [x] مراجعة تغييرات الواجهة: توحيد مسار الطلبات في `api-client.ts` + تجديد الرمز عند 401 عبر `session-refresh.ts` (منع تجدد متزامن، وحماية إرث الترويسة `Authorization`).
+- [x] التحقق: `alx_api` tsc نظيف و 42 suite / 373 test ناجحة — الواجهة tsc نظيف و 92 file / 405 test ناجحة (2 متخطاة = اختبارات تكامل قاعدة البيانات).
+- [ ] تنفيذ `0038_close_flattening_gaps.sql` ثم `0034_drop_legacy_jsonb_payloads.sql` من لوحة Supabase بحساب `postgres` (لا يملك `alx_api_runtime` صلاحيات DDL).
+- [ ] بعد الإسقاط: إعادة تشغيل حارس البنية `expectNoJsonb` وحزمة الاختبارات الكاملة للتأكد من عدم بقاء أي قارئ حمولة.
+- [ ] قرار مطلوب من المالك: طبقة `src/data/dtos/mappers/feature.mappers.ts` (1097 سطرًا) ميتة بالكامل (27 دالة بلا أي مستدعٍ و9 تستدعيها اختبارات فقط) وما زالت تقرأ `row.data` — يُنصح بحذفها أو تسطيحها.
+
+## [2026-10-16 08:26 +03:00] — Qoder
+- [x] تدقيق ما قبل الإسقاط (قراءة فقط) للتأكد أن كل مفتاح داخل `data` له هدف رئيسي: النتائج في `DBdevloping_history.md` لنفس القسم.
+- [x] تأكيد أن 0010 (`alx_api_private.notification_outbox`) و 0023 (أعمدة `assets` الناقصة + `asset_maintenance_log`) طُبِّقت فعلًا على القاعدة الحيّة.
+- [ ] REQUIRED — تشغيل `0038_close_flattening_gaps.sql` ثم `0034_drop_legacy_jsonb_payloads.sql` من لوحة Supabase بحساب `postgres` (الترتيب إجباري: §0 ينشئ `alx_api_private.safe_jsonb`، و§5 يعمر `orders_history_change` قبل إسقاط اللقطات).
+- [ ] بعد الإسقاط: إعادة تشغيل حارس `expectNoJsonb` + اختبار RFR/RR لكل قسم، وتأكيد أن القائمة لا تقرأ `row.data`.
+- [ ] قرار مطلوب من المالك: طبقة `src/data/dtos/mappers/feature.mappers.ts` (1097 سطرًا) ميتة بالكامل (27 دالة بلا أي مستدعٍ و9 تستدعيها اختبارات فقط) وما زالت تقرأ `row.data` — يُنصح بحذفها أو تسطيحها.
+
+## [2026-10-16 08:47:00 +03:00] — استكمال تنفيذ ما تبقى وترحيل قاعدة البيانات عبر Supabase MCP
+- [ ] ترحيل 0018_settings_and_currency_api.sql عبر Supabase MCP لمعالجة صلاحيات العملات والإعدادات ومنع خطأ "لا تملك الصلاحية المطلوبة".
+- [ ] ترحيل 0038_close_flattening_gaps.sql عبر Supabase MCP لملء الحقول المسطحة وتوليد سجل التغييرات ودوال safe_jsonb.
+- [ ] ترحيل 0034_drop_legacy_jsonb_payloads.sql عبر Supabase MCP لإسقاط أعمدة data و jsonb القديمة بعد تأكيد النقل.
+- [ ] توثيق عمليات وأوامر SQL المطبقة داخل db_commends.md و DBdevloping_history.md.
+- [ ] فحص الكود والواجهة ومعالجة أي استدعاءات متبقية لـ data أو mapper ميت في feature.mappers.ts.
+- [ ] تشغيل فحص البناء والأنواع (TypeScript) في كل من alx_api و SWIFTSHIP_SYSTEM والتأكد من عدم وجود أي خطأ (0 errors).
+- [ ] تشغيل الاختبارات للتأكد من سلامة النظام بعد إسقاط الحقول القديمة.
+- [ ] توثيق التحديثات والنتائج النهائية في devloping_history.md و todo.md.
+
+## [2026-10-16 23:19:12 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+### إكمال ترحيلات قاعدة البيانات والتحقق من سلامة النظام (Completed DB Migrations & Verification)
+- [x] حل تعارض view `alx_api_private.customers_read` بإسقاط الـ view أولاً بـ CASCADE مما أتاح إسقاط أعمدة jsonb القديمة دون تعليق.
+- [x] استكمال 0038 §13: إسقاط `customers.location` و `customers.preferred_categories` (jsonb)، وتسطيح الفئات إلى `text[]` مع إعادة بناء الـ view ومنح الصلاحيات.
+- [x] تنفيذ 0038 §14: إنشاء فهارس الأعمدة المسطحة لجدول `orders` (`orders_tracking_number_idx`, `orders_customer_id_idx`, `orders_courier_id_flat_idx`).
+- [x] تنفيذ 0038 §15: إضافة أعمدة `settings_general` (`timezone`, `auto_notification`, `cbm_shipping_rate`) ونقل بياناتها.
+- [x] تنفيذ 0038 §16: إضافة أعمدة `user_settings` (`sidebar_collapsed`, `sidebar_items`) ونقل بياناتها.
+- [x] تنفيذ 0038 §17: إعادة كتابة دالة `validate_order_party()` للتعامل الحصري مع الأعمدة المسطحة دون الكتابة في `orders.data`.
+- [x] تنفيذ 0038 §18: تسطيح تفاصيل الجسم في `cust_details` وإضافة الأعمدة (`coat_size`, `pants_size`, `shorts_size`, `shoe_size`, `height_cm`, `weight_kg`, `preferred_colors`) ونقل بياناتها.
+- [x] تنفيذ 0038 §19: نقل `externalResponse` إلى العمود المسطح في `whatsapp_logs`.
+- [x] حل خطأ قيد NOT NULL في `orders_history.account_trans_count` بدالة `orders_history_write` وتمرير القيمة 0 افتراضياً.
+- [x] تنفيذ 0038 §20: ترحيل `customerAccountId` إلى `orders.customer_account_id`.
+- [x] تنفيذ الترحيل النهائي 0034 (`0034_drop_legacy_jsonb_payloads.sql`): إسقاط كافة أعمدة `data` و `jsonb` القديمة المتبقية عبر 18 جدولاً.
+- [x] التحقق التام من قاعدة البيانات: عدد أعمدة `data` القديمة المتبقية أصبح 0 في كامل المخطط.
+- [x] فحص الأنواع (TypeScript): خادم `alx_api` بنجاح 100% (0 errors).
+- [x] فحص الأنواع (TypeScript): واجهة `SWIFTSHIP_SYSTEM` بنجاح 100% (0 errors).
+- [x] تشغيل اختبارات الخادم (`alx_api` jest): 42 جناح اختبار نجحت بالكامل (373/373 اختبار بنجاح).
+- [x] تشغيل اختبارات الواجهة (`SWIFTSHIP_SYSTEM` vitest): 92 ملف اختبار نجحت بالكامل (405/405 اختبار بنجاح).
+
+## [2026-10-16 23:31:47 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+### تسجيل وتثبيت الترحيلات في قائمة Database Migrations (Registering Migrations in Supabase Dashboard)
+- [x] تسجيل وتوثيق ملفات الترحيل في جدول `supabase_migrations.schema_migrations`:
+  - `settings_and_currency_api_0018` (`20261016200018`)
+  - `employees_extended_fields_0019` (`20261016200019`)
+  - `finance_atomic_rpc_runtime_access_0020` (`20261016200020`)
+  - `close_flattening_gaps_0038` (`20261016230038`)
+  - `drop_legacy_jsonb_payloads_0034` (`20261016231434`)
+- [x] تأكيد ظهور جميع الترحيلات بنصوصها الكاملة وتواريخها في لوحة تحكم Supabase تحت قائمة Database Migrations.

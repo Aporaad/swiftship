@@ -4,7 +4,8 @@ export interface RolesDatabaseRow {
   role_id: string;
   title: string | null;
   is_default: boolean;
-  permissions: unknown;
+  // الصلاحيات لم تعد عمودًا في roles؛ تأتي صفوفًا من role_permission (role_id, permission_code).
+  // Permissions are no longer a roles column; they come from role_permission (role_id, permission_code) rows.
   created_at: string | null;
   updated_at: string | null;
   created_by: string | null;

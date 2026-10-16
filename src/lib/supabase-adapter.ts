@@ -5,9 +5,9 @@
 // Use alxDataGateway.ts or alxAuthGateway.ts instead.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { extractDirectColumns, getTablePrimaryKey, usesExplicitFinancialColumns } from './supabase-adapter-columns';
+import { extractDirectColumns, getTablePrimaryKey } from './supabase-adapter-columns';
 import { cleanData, extractRowPayload, normalizePayload, sanitizeDataPayload } from './supabase-adapter-mappers';
-export { extractDirectColumns, getTablePrimaryKey, usesExplicitFinancialColumns } from './supabase-adapter-columns';
+export { extractDirectColumns, getTablePrimaryKey } from './supabase-adapter-columns';
 export { extractRowPayload, normalizePayload, sanitizeDataPayload } from './supabase-adapter-mappers';
 
 /**
@@ -624,7 +624,9 @@ export async function addDoc(newID: any, collectionRef: SupabaseQuery, rawData: 
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
-    const writePayload = usesExplicitFinancialColumns(table) ? { [pkCol]: id, ...directCols } : { [pkCol]: id, ...directCols, data };
+    // الأعمدة الرئيسية فقط: لا عمود payload في قاعدة البيانات ليكتب فيه هذا المسار.
+    // First-class columns only — there is no payload column left for this path to write.
+    const writePayload = { [pkCol]: id, ...directCols };
     const { error } = await supabase.from(table).insert(writePayload);
     if (error) {
       const isRlsError = error?.code === '42501' || String(error?.message || '').toLowerCase().includes('row-level security');
@@ -670,9 +672,8 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: SupabaseQu
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
-    const writePayload = usesExplicitFinancialColumns(table)
-      ? { [pkCol]: id, assetCode, ...directCols }
-      : { [pkCol]: id, assetCode, ...directCols, data };
+    // الأعمدة الرئيسية فقط — no payload column exists to receive the rest of the document.
+    const writePayload = { [pkCol]: id, assetCode, ...directCols };
     const { error } = await supabase.from(table).insert(writePayload);
     if (error) {
       throw createWriteError('insert', table, error);
@@ -713,7 +714,8 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
-    const writePayload = usesExplicitFinancialColumns(table) ? { [pkCol]: id, ...directCols } : { [pkCol]: id, ...directCols, data };
+    // الأعمدة الرئيسية فقط — the upsert writes real columns, never a payload document.
+    const writePayload = { [pkCol]: id, ...directCols };
     const { error } = await supabase.from(table).upsert(writePayload);
     if (error) {
       const isRlsError = error?.code === '42501' || String(error?.message || '').toLowerCase().includes('row-level security');
@@ -805,7 +807,8 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
-    const writePayload = usesExplicitFinancialColumns(table) ? directCols : { ...directCols, data };
+    // الأعمدة الرئيسية فقط — a partial update touches only the columns it sends.
+    const writePayload = directCols;
     const { error } = await supabase.from(table).update(writePayload).eq(pkCol, id);
     if (error) {
       const isRlsError = error?.code === '42501' || String(error?.message || '').toLowerCase().includes('row-level security');

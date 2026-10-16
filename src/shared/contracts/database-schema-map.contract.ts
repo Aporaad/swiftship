@@ -25,7 +25,7 @@ export const SYSTEM_DATABASE_SCHEMA_REGISTRY: ReadonlyArray<TableColumnMapping> 
       { column: 'order_party_account_id', targetTable: 'accounts' },
     ],
     columns: [
-      'order_id', 'data', 'order_number', 'tracking_number', 'customer_id', 
+      'order_id', 'order_number', 'tracking_number', 'customer_id', 
       'order_status1', 'created_at', 'order_status_id', 'order_source_id', 
       'order_source_type', 'delivery_courier_id', 'shipping_courier_id', 
       'order_party_id', 'order_party_type', 'is_staff_order', 'employee_id', 
@@ -44,7 +44,7 @@ export const SYSTEM_DATABASE_SCHEMA_REGISTRY: ReadonlyArray<TableColumnMapping> 
     ],
     columns: [
       'shipment_id', 'order_id', 'tracking_number', 'shipping_company_id', 
-      'courier_id', 'shipment_status', 'shipping_cost', 'weight', 'data', 
+      'courier_id', 'shipment_status', 'shipping_cost', 'weight', 
       'created_at', 'shipping_category_id', 'content_category_id', 
       'content_category_name', 'carton_count', 'customs_fee', 'tax_fee', 
       'other_category_fee', 'category_fees_total', 'category_fee_currency', 
@@ -177,15 +177,29 @@ export const SYSTEM_DATABASE_SCHEMA_REGISTRY: ReadonlyArray<TableColumnMapping> 
       { column: 'order_id', targetTable: 'orders' },
       { column: 'shipment_id', targetTable: 'shipments' },
       { column: 'main_entry_id', targetTable: 'main_entry' },
+      { column: 'account_trans_id', targetTable: 'account_trans' },
     ],
+    // لقطات jsonb (before_data/after_data/metadata) صارت أعمدة مسطّحة وصفوف تغيير في orders_history_change.
+    // The jsonb snapshots (before_data/after_data/metadata) became flat columns plus rows in orders_history_change.
     columns: [
       'orders_history_id', 'order_id', 'order_number', 'shipment_id', 
       'activity_log_id', 'event_type', 'event_category', 'operation', 
       'entity_type', 'actor_id', 'actor_name', 'actor_role', 'source', 
-      'summary', 'before_data', 'after_data', 'metadata', 'occurred_at', 
-      'created_at', 'main_entry_id', 'account_trans_count', 'updated_at', 
+      'summary', 'changed_fields', 'trigger_name', 'deleted_order_id', 
+      'order_reference', 'activity_target', 'activity_action', 
+      'activity_details', 'automation_key', 'auto_rule_id', 'status_id', 
+      'is_automatic', 'main_entry_id', 'account_trans_id', 
+      'account_trans_count', 'occurred_at', 'created_at', 'updated_at', 
       'created_by', 'updated_by'
     ],
+  },
+  {
+    tableName: 'orders_history_change',
+    primaryKey: 'orders_history_id',
+    foreignKeys: [{ column: 'orders_history_id', targetTable: 'orders_history' }],
+    // صف لكل حقل تغيّر: المفتاح المركّب (orders_history_id, field_name).
+    // One row per changed field: composite key (orders_history_id, field_name).
+    columns: ['orders_history_id', 'field_name', 'old_value', 'new_value'],
   },
   {
     tableName: 'items_category',
@@ -195,7 +209,7 @@ export const SYSTEM_DATABASE_SCHEMA_REGISTRY: ReadonlyArray<TableColumnMapping> 
       'items_category_id', 'code', 'name_ar', 'name_en', 'description', 
       'hs_code_hint', 'customs_per_carton', 'tax_per_carton', 'other_fees_per_carton', 
       'customs_rate', 'tax_rate', 'fee_currency', 'requires_review', 'is_active', 
-      'details', 'created_at', 'updated_at', 'created_by', 'updated_by'
+      'created_at', 'updated_at', 'created_by', 'updated_by'
     ],
   },
   {
@@ -265,6 +279,6 @@ export const SYSTEM_DATABASE_SCHEMA_REGISTRY: ReadonlyArray<TableColumnMapping> 
     tableName: 'roles',
     primaryKey: 'role_id',
     foreignKeys: [],
-    columns: ['role_id', 'title', 'is_default', 'permissions', 'created_at', 'updated_at', 'created_by', 'updated_by', 'code', 'description'],
+    columns: ['role_id', 'title', 'is_default', 'created_at', 'updated_at', 'created_by', 'updated_by', 'code', 'description'],
   },
 ];

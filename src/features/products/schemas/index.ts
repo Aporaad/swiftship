@@ -16,7 +16,8 @@ export const productsUpdateSchema = makeObjectSchema<Partial<ProductsCreateInput
 const categoryRules = {
   code: 'string', nameAr: 'string', nameEn: 'string', description: 'string', hsCodeHint: 'string', customsPerCarton: 'number',
   taxPerCarton: 'number', otherFeesPerCarton: 'number', customsRate: 'number', taxRate: 'number', feeCurrency: 'string',
-  requiresReview: 'boolean', isActive: 'boolean', details: 'object',
+  requiresReview: 'boolean', isActive: 'boolean', groupName: 'string',
+  requiresHighValueReview: 'boolean', requiresHazardReview: 'boolean',
 } as const;
 export const productCategoryCreateSchema = makeObjectSchema<ProductCategoryCreateInput>([], categoryRules);
 export const productCategoryUpdateSchema = makeObjectSchema<Partial<ProductCategoryCreateInput>>([], categoryRules);

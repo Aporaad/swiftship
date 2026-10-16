@@ -1,4 +1,4 @@
-import type { OrderHistoryEvent } from './orderHistoryService';
+import { normalizeHistoryFieldName, type OrderHistoryEvent } from './orderHistoryService';
 
 export type HistoryTimeRange = 'all' | 'today' | 'last_24_hours' | 'last_7_days' | 'last_30_days';
 
@@ -92,6 +92,8 @@ function matchesDateAndTime(eventDate: Date, filters: OrderHistoryFilters): bool
 function matchesSearch(event: OrderHistoryEvent, query: string): boolean {
   const search = query.trim().toLocaleLowerCase();
   if (!search) return true;
+  // البحث على القيم المسطّحة: أسماء الحقول المعدّلة وقيمها قبل وبعد التغيير والملخص، بلا حمولات jsonb.
+  // Search the flat values: changed field names, their old/new values and the summary — no jsonb payloads.
   const searchable = [
     event.id,
     event.eventType,
@@ -108,9 +110,21 @@ function matchesSearch(event: OrderHistoryEvent, query: string): boolean {
     event.mainEntryId,
     event.accountTransId,
     event.activityLogId,
-    event.beforeData,
-    event.afterData,
-    event.metadata,
+    event.triggerName,
+    event.orderReference,
+    event.activityTarget,
+    event.activityAction,
+    event.automationKey,
+    event.autoRuleId,
+    event.statusId,
+    event.activityDetails,
+    ...event.changedFields,
+    ...event.changes.flatMap((change) => [
+      change.fieldName,
+      normalizeHistoryFieldName(change.fieldName),
+      change.oldValue,
+      change.newValue,
+    ]),
   ].map(normalizedText).join(' ');
   return searchable.includes(search);
 }

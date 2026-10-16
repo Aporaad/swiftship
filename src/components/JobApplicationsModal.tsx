@@ -4,11 +4,35 @@ import { Briefcase, X, Check, ShieldAlert, RefreshCw, User, Phone, Mail, MapPin,
 import { supabase, doc, setDoc, db } from '../data/legacy/legacy-compat.ts';
 import { financialAccountService } from '../services/financialAccountService';
 
-function extractRows(data: any[]): any[] {
-  return (data || []).map(row => {
-    const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-    return { id: row.id, ...payload };
-  });
+/**
+ * طلبات التوظيف تُقرأ من أعمدة jobs_req المسطّحة مباشرة — لا وجود لأي حمولة jsonb بعد الآن.
+ * Job applications are projected from the flat jobs_req columns; no payload column exists any more.
+ */
+function mapApplicationRows(rows: any[]): any[] {
+  const text = (value: unknown) => (typeof value === 'string' ? value : value == null ? '' : String(value));
+  const toEpoch = (value: unknown) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const parsed = Date.parse(String(value ?? ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  return (rows || []).map((row: any) => ({
+    id: String(row.jobs_req_id ?? row.id ?? ''),
+    fullName: text(row.full_name),
+    phone: text(row.phone),
+    email: text(row.email),
+    address: text(row.address),
+    city: text(row.city),
+    experienceYears: Number(row.experience_years ?? 0) || 0,
+    idNumber: text(row.id_number),
+    jobPosition: text(row.job_position),
+    qualification: text(row.qualification),
+    notes: text(row.notes),
+    category: text(row.category),
+    refCode: text(row.ref_code),
+    status: text(row.status) || 'pending_review',
+    createdAt: toEpoch(row.created_at),
+    updatedAt: toEpoch(row.updated_at),
+  }));
 }
 
 const POSITION_LABELS: Record<string, { ar: string; en: string }> = {
@@ -39,7 +63,7 @@ export default function JobApplicationsModal({ isOpen, onClose }: { isOpen: bool
         console.warn('[JobApplicationsModal] Fetch error:', error.message);
         setApplications([]);
       } else {
-        const rows = extractRows(data || []);
+        const rows = mapApplicationRows(data || []);
         rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setApplications(rows);
       }
@@ -54,13 +78,12 @@ export default function JobApplicationsModal({ isOpen, onClose }: { isOpen: bool
     setActioningId(appId);
     try {
       const existing = applications.find(a => a.id === appId) || {};
-      const updatedPayload = {
-        ...existing,
+      // الحالة والتاريخ عمودان حقيقيان في jobs_req؛ لا تُكتب أي حمولة كاملة.
+      // Status and timestamp are first-class jobs_req columns; no whole-payload document is written.
+      await supabase.from('jobs_req').update({
         status: newStatus,
-        updatedAt: Date.now()
-      };
-      const { id: _, ...cleanPayload } = updatedPayload;
-      await supabase.from('jobs_req').update({ data: cleanPayload }).eq('jobs_req_id', appId);
+        updated_at: new Date().toISOString(),
+      }).eq('jobs_req_id', appId);
 
       // If approved and applicant applied for courier role, auto-register as courier in system
       if (newStatus === 'approved' && (existing.jobPosition === 'local_courier' || existing.jobPosition === 'sourcing_courier')) {

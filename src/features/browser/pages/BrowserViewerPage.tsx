@@ -64,6 +64,70 @@ const DEFAULT_TAB_COLORS = [
   '#eab308'  // Yellow
 ];
 
+/** تحويل أي قيمة تاريخ إلى epoch رقمي حتى تبقى واجهة التبويب بلا تغيير. */
+const epochOf = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Date.parse(String(value ?? ''));
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+/**
+ * browser_pages صارت أعمدة مسطّحة: url/name_ar/name_en/tab_color/view_mode/is_pinned/auto_login/
+ * username/password/sort_order/category/created_at/updated_at. لا تُقرأ أي حمولة jsonb.
+ * Flat browser_pages columns only; the legacy payload column no longer exists. The camelCase fallbacks
+ * keep rows already sitting in the local browser cache readable during the cutover.
+ */
+function mapBrowserPageRecord(raw: Record<string, any> | undefined): BrowserPageItem {
+  const record = raw || {};
+  const viewMode = (record.view_mode ?? record.viewMode) as 'iframe' | 'proxy' | undefined;
+  const category = (record.category ?? undefined) as BrowserPageItem['category'];
+  const sortOrderValue = record.sort_order ?? record.sortOrder;
+  return {
+    id: String(record.browser_page_id ?? record.id ?? ''),
+    name: String(record.name_ar ?? record.name_en ?? record.name ?? ''),
+    url: String(record.url ?? ''),
+    username: record.username == null ? undefined : String(record.username),
+    password: record.password == null ? undefined : String(record.password),
+    tabColor: record.tab_color ?? record.tabColor ?? undefined,
+    isPinned: Boolean(record.is_pinned ?? record.isPinned ?? false),
+    sortOrder: sortOrderValue == null ? undefined : Number(sortOrderValue) || 0,
+    viewMode: viewMode === 'iframe' || viewMode === 'proxy' ? viewMode : undefined,
+    autoLogin: Boolean(record.auto_login ?? record.autoLogin ?? false),
+    category,
+    createdAt: epochOf(record.created_at ?? record.createdAt),
+    updatedAt: epochOf(record.updated_at ?? record.updatedAt),
+    // مصدر الصفحة المُولّدة تلقائيًا يبقى في ذاكرة المتصفح فقط: لا يوجد عمود source_id في browser_pages.
+    // Auto pages keep their source reference in memory only: browser_pages has no source_id column.
+    sourceId: record.sourceId ?? undefined,
+  };
+}
+
+/**
+ * بناء صفوف browser_pages بأسماء الأعمدة الحقيقية. الاسم الواحد يُكتب في العمودين ثنائيّي اللغة
+ * لأن الجدول لا يملك عمود name مفردًا.
+ * Writes real column names; the single UI name field fills both bilingual columns because
+ * browser_pages has no plain "name" column.
+ */
+function toBrowserPageColumns(page: Partial<BrowserPageItem>): Record<string, unknown> {
+  const columns: Record<string, unknown> = {};
+  if (page.name !== undefined) {
+    columns.name_ar = page.name;
+    columns.name_en = page.name;
+  }
+  if (page.url !== undefined) columns.url = page.url;
+  if (page.username !== undefined) columns.username = page.username;
+  if (page.password !== undefined) columns.password = page.password;
+  if (page.tabColor !== undefined) columns.tab_color = page.tabColor;
+  if (page.viewMode !== undefined) columns.view_mode = page.viewMode;
+  if (page.autoLogin !== undefined) columns.auto_login = page.autoLogin;
+  if (page.isPinned !== undefined) columns.is_pinned = page.isPinned;
+  if (page.sortOrder !== undefined) columns.sort_order = page.sortOrder;
+  if (page.category !== undefined) columns.category = page.category;
+  if (page.createdAt !== undefined) columns.created_at = new Date(page.createdAt).toISOString();
+  if (page.updatedAt !== undefined) columns.updated_at = new Date(page.updatedAt).toISOString();
+  return columns;
+}
+
 export default function BrowserViewerPage() {
   const { settings } = useSettings();
   const isAr = settings.language === 'ar';
@@ -161,10 +225,7 @@ export default function BrowserViewerPage() {
   // 1. Real-time Subscription to DB table `browser_pages`
   useEffect(() => {
     const unsubPages = onSnapshot(collection(db, 'browser_pages'), (snap: any) => {
-      const items: BrowserPageItem[] = snap.docs.map((d: any) => ({
-        id: d.id,
-        ...d.data()
-      }));
+      const items: BrowserPageItem[] = snap.docs.map((d: any) => ({ ...mapBrowserPageRecord(d.data()), id: d.id }));
       setPages(items);
       setLoading(false);
     }, (err: any) => {
@@ -199,7 +260,7 @@ export default function BrowserViewerPage() {
     .filter(s => s.type === 'App' || s.source_url)
     .map(s => ({
       id: `auto_src_${s.id}`,
-      name: s.source_name || s.name || 'متجر تسوق',
+      name: s.name_ar || s.name_en || s.name || 'متجر تسوق',
       url: s.source_url || 'https://google.com',
       tabColor: '#8b5cf6',
       isPinned: false,
@@ -209,12 +270,14 @@ export default function BrowserViewerPage() {
       sourceId: s.id
     }));
 
+  // لا عمود tracking_url في shipping_companies: التبويب التلقائي يعتمد على shipping_company_url الحقيقي.
+  // shipping_companies has no tracking_url column, so auto tabs are built from the real shipping_company_url.
   const autoShippingPages: BrowserPageItem[] = shippingCompanies
-    .filter(c => c.tracking_url)
+    .filter(c => c.shipping_company_url)
     .map(c => ({
       id: `auto_ship_${c.id}`,
-      name: c.name || 'شركة شحن',
-      url: c.tracking_url || 'https://google.com',
+      name: c.name_ar || c.name_en || c.name || 'شركة شحن',
+      url: c.shipping_company_url || 'https://google.com',
       tabColor: '#3b82f6',
       isPinned: false,
       sortOrder: 995,
@@ -308,8 +371,12 @@ export default function BrowserViewerPage() {
       }
 
       const encodedPassword = formData.password ? btoa(formData.password) : '';
+      const now = Date.now();
 
-      const payload: Partial<BrowserPageItem> = {
+      // الكتابة تتم على أعمدة browser_pages المسطّحة فقط — بلا مستند حمولة.
+      // Only flat browser_pages columns are written; no payload document is sent.
+      const pageValues: BrowserPageItem = {
+        id: editingPage ? editingPage.id : `pg_${now}`,
         name: formData.name.trim(),
         url: finalUrl,
         username: formData.username.trim(),
@@ -318,36 +385,23 @@ export default function BrowserViewerPage() {
         viewMode: formData.viewMode,
         autoLogin: formData.autoLogin,
         isPinned: formData.isPinned,
-        updatedAt: Date.now()
+        sortOrder: editingPage ? (editingPage.sortOrder ?? 0) : pages.length + 1,
+        category: editingPage ? (editingPage.category ?? 'custom') : 'custom',
+        createdAt: editingPage ? (editingPage.createdAt ?? now) : now,
+        updatedAt: now,
       };
+      const columns = toBrowserPageColumns(pageValues);
 
       if (editingPage) {
-        await updateDoc(doc(db, 'browser_pages', editingPage.id), payload);
+        await updateDoc(doc(db, 'browser_pages', editingPage.id), columns);
         toast.success(isAr ? 'تم تحديث بيانات الصفحة بنجاح!' : 'Page updated successfully!');
         if (activePage?.id === editingPage.id) {
-          setActivePage({ ...editingPage, ...payload });
+          setActivePage({ ...editingPage, ...pageValues });
         }
       } else {
-        const id = `pg_${Date.now()}`;
-        const newPage: BrowserPageItem = {
-          id,
-          name: formData.name.trim(),
-          url: finalUrl,
-          username: formData.username.trim(),
-          password: encodedPassword,
-          tabColor: formData.tabColor,
-          viewMode: formData.viewMode,
-          autoLogin: formData.autoLogin,
-          isPinned: formData.isPinned,
-          sortOrder: pages.length + 1,
-          category: 'custom',
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        };
-
-        await setDoc(doc(db, 'browser_pages', id), newPage);
+        await setDoc(doc(db, 'browser_pages', pageValues.id), columns);
         toast.success(isAr ? 'تم إضافة الصفحة وحفظ بياناتها بنجاح!' : 'Page saved successfully!');
-        setActivePage(newPage);
+        setActivePage(pageValues);
       }
 
       setIsModalOpen(false);
@@ -367,17 +421,17 @@ export default function BrowserViewerPage() {
       if (page.id.startsWith('auto_')) {
         // Convert auto page to a real record in browser_pages
         const newDocId = `pg_${Date.now()}`;
-        const realDoc: BrowserPageItem = {
+        const realPage: BrowserPageItem = {
           ...page,
           id: newDocId,
           isPinned: newPinned,
           updatedAt: Date.now()
         };
-        await setDoc(doc(db, 'browser_pages', newDocId), realDoc);
+        await setDoc(doc(db, 'browser_pages', newDocId), toBrowserPageColumns(realPage));
       } else {
         await updateDoc(doc(db, 'browser_pages', page.id), {
-          isPinned: newPinned,
-          updatedAt: Date.now()
+          is_pinned: newPinned,
+          updated_at: new Date().toISOString(),
         });
       }
       toast.success(newPinned ? (isAr ? 'تم تثبيت الصفحة بالقمة 📌' : 'Page pinned') : (isAr ? 'تم فك تثبيت الصفحة' : 'Page unpinned'));
@@ -400,12 +454,12 @@ export default function BrowserViewerPage() {
       const currentSort = page.sortOrder || currentIndex;
       const otherSort = otherPage.sortOrder || targetIndex;
 
-      // Swap sortOrders
+      // Swap sortOrders on the flat sort_order column
       if (!page.id.startsWith('auto_')) {
-        await updateDoc(doc(db, 'browser_pages', page.id), { sortOrder: otherSort });
+        await updateDoc(doc(db, 'browser_pages', page.id), { sort_order: otherSort });
       }
       if (!otherPage.id.startsWith('auto_')) {
-        await updateDoc(doc(db, 'browser_pages', otherPage.id), { sortOrder: currentSort });
+        await updateDoc(doc(db, 'browser_pages', otherPage.id), { sort_order: currentSort });
       }
     } catch (err: any) {
       console.error('Error reordering pages:', err);

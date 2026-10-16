@@ -1,6 +1,13 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Clock3, FileText, Filter, PackageCheck, ReceiptText, RefreshCw, RotateCcw, Search, ScrollText, UserRound, X } from 'lucide-react';
-import { orderHistoryService, type OrderHistoryContext, type OrderHistoryEvent } from '../../services/orderHistoryService';
+import {
+  historyChangesAsRecord,
+  historyEventChanges,
+  historyEventDetailFields,
+  orderHistoryService,
+  type OrderHistoryContext,
+  type OrderHistoryEvent,
+} from '../../services/orderHistoryService';
 import { runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
 import {
   appliedOrderHistoryFilterCount,
@@ -101,17 +108,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+// صفوف التغيير المسطّحة هي مصدر الجدول: اسم الحقل مع قيمته القديمة والجديدة.
+// The flat change rows drive the table: each field name with its previous and new value.
 function changeEntries(event: OrderHistoryEvent): Array<[string, ChangeValue]> {
-  const changes = event.metadata?.changes;
-  if (isObject(changes)) {
-    return Object.entries(changes).map(([field, value]) => [field, isObject(value) ? value : { after: value }]);
-  }
-
-  const fields = Array.isArray(event.metadata?.changedFields) ? event.metadata.changedFields : [];
-  return fields.map((field) => {
-    const key = String(field);
-    return [key, { before: event.beforeData?.[key], after: event.afterData?.[key] }];
-  });
+  return historyEventChanges(event).map((change) => [change.fieldName, { before: change.oldValue, after: change.newValue }]);
 }
 
 function actorLabel(event: OrderHistoryEvent, isAr: boolean) {
@@ -150,7 +150,12 @@ function DetailsGrid({ value, isAr }: { value: Record<string, unknown>; isAr: bo
 
 export function EventDetails({ event, isAr }: { event: OrderHistoryEvent; isAr: boolean }) {
   const changes = changeEntries(event);
-  const activityDetails = isObject(event.metadata?.activityDetails) ? event.metadata.activityDetails : null;
+  const activityDetails = isObject(event.activityDetails) ? event.activityDetails : null;
+  // اللقطات المشتقة تُبنى لحظيًا من صفوف التغيير، فلا يوجد كائن حمولة مخزّن.
+  // The snapshots are derived on the fly from the change rows, so no payload object is ever stored.
+  const beforeValues = historyChangesAsRecord(event, 'oldValue');
+  const afterValues = historyChangesAsRecord(event, 'newValue');
+  const eventFields = historyEventDetailFields(event);
 
   return (
     <div className="space-y-5 border-t border-slate-800 bg-black/15 px-5 py-5">
@@ -177,9 +182,9 @@ export function EventDetails({ event, isAr }: { event: OrderHistoryEvent; isAr: 
       {activityDetails && <div><h3 className="mb-3 text-sm font-black text-white">{isAr ? 'تفاصيل النشاط المرتبط' : 'Related activity details'}</h3><DetailsGrid value={activityDetails} isAr={isAr} /></div>}
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        <Snapshot title={isAr ? 'لقطة قبل التغيير' : 'Before change snapshot'} value={event.beforeData} isAr={isAr} />
-        <Snapshot title={isAr ? 'لقطة بعد التغيير' : 'After change snapshot'} value={event.afterData} isAr={isAr} />
-        <Snapshot title={isAr ? 'بيانات التسجيل الإضافية' : 'Additional event data'} value={event.metadata} isAr={isAr} />
+        <Snapshot title={isAr ? 'لقطة قبل التغيير' : 'Before change snapshot'} value={beforeValues} isAr={isAr} />
+        <Snapshot title={isAr ? 'لقطة بعد التغيير' : 'After change snapshot'} value={afterValues} isAr={isAr} />
+        <Snapshot title={isAr ? 'بيانات التسجيل الإضافية' : 'Additional event data'} value={eventFields} isAr={isAr} />
       </div>
     </div>
   );

@@ -2,10 +2,17 @@ export const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   employees: { fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en', accountId: 'account_id', monthlySalary: 'monthly_salary', currency: 'currency', jobsType: 'job_type', jobType: 'job_type', createdAt: 'created_at', createdBy: 'created_by' },
   users: { role: 'role', username: 'username', email: 'email', disabled: 'disabled', linkedType: 'linked_type', linkedEntity: 'linked_entity', fullName: 'full_name', password: 'password', systemPin: 'system_pin', isRoot: 'is_root', phone: 'phone', address: 'address', createdAt: 'created_at', updatedAt: 'updated_at', lastSeen: 'last_seen', lastSeenAt: 'last_seen_at' },
   portal_users: { portalRole: 'portal_role', username: 'username', email: 'email', disabled: 'disabled', isDisabled: 'is_disabled', approvalStatus: 'approval_status', linkedCustomerId: 'linked_customer_id', accountId: 'account_id', fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en' },
-  roles: { title: 'title', isDefault: 'is_default', permissions: 'permissions', createdAt: 'created_at', updatedAt: 'updated_at', createdBy: 'created_by', updatedBy: 'updated_by' },
+  // صلاحيات الدور صفوف ابنة في role_permission، لا عمودًا داخل roles بعد اليوم.
+  // Role permissions are role_permission rows now, not a roles column.
+  roles: { title: 'title', code: 'code', description: 'description', isDefault: 'is_default', createdAt: 'created_at', updatedAt: 'updated_at', createdBy: 'created_by', updatedBy: 'updated_by' },
   sessions: { userId: 'user_id', fullName: 'full_name', email: 'email', role: 'role', deviceInfo: 'device_info', createdAt: 'created_at', lastSeen: 'last_seen', forceLogout: 'force_logout' },
-  settings: { category: 'category' },
-  user_settings: { userId: 'user_id' },
+  // جدول الإعدادات لم يعد مستودع مستندات: كل فئة صارت جدولًا بأعمدة خاصة بها يقرأه الـ API.
+  // The settings table is no longer a document store: each category became its own flat table read via the API.
+  user_settings: {
+    userId: 'user_id', language: 'language', theme: 'theme', fontSize: 'font_size',
+    dashboardGridColumns: 'dashboard_grid_columns', visibleMetrics: 'visible_metrics',
+    sidebarCollapsed: 'sidebar_collapsed', sidebarItems: 'sidebar_items',
+  },
   customers: { fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en', accountId: 'account_id', disabled: 'is_active', level: 'customer_level', customerLevel: 'customer_level', levels: 'customer_level' },
   couriers: { fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en', accountId: 'account_id', financialCurrency: 'currency', currency: 'currency', disabled: 'is_active', courierType: 'courier_type', type: 'courier_type', level: 'courier_level', levels: 'courier_level' },
   account: { accountCode: 'account_code', code: 'account_code', account_code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', accountType: 'account_type', account_type: 'account_type', createdAt: 'created_at', updatedAt: 'updated_at' },
@@ -20,7 +27,9 @@ export const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   sources: { name: 'name', nameAr: 'name_ar', nameEn: 'name_en', supplierType: 'type', type: 'type', sourceUrl: 'source_url', accountId: 'account_id' },
   salary_history: { transactionsID: 'transactions_id', financialAccountId: 'account_id', accountId: 'account_id', userId: 'user_id', amount: 'amount', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', salaryMonth: 'month', month: 'month', createdAt: 'created_at' },
   assets: { nameAr: 'name_ar', nameEn: 'name_en', linkedAccountId: 'account_id', accountId: 'account_id', status: 'status', currency: 'currency', isActive: 'is_active', assetCode: 'asset_code', type: 'type', createdAt: 'created_at' },
-  notifications: { userId: 'user_id', category: 'category', isPublic: 'is_public', read: 'read', type: 'type', createdAt: 'created_at' },
+  // القراءة تُسمّي العمودين المسقطين (read / associated_user_ids) بدل نظيريهما المسطّحين.
+  // Reads alias the two dropped columns to their flat replacements: is_read and recipient_ids.
+  notifications: { userId: 'user_id', category: 'category', isPublic: 'is_public', read: 'is_read', isRead: 'is_read', associatedUserIds: 'recipient_ids', recipientIds: 'recipient_ids', type: 'type', title: 'title', message: 'message', creatorId: 'creator_id', creatorName: 'creator_name', createdAt: 'created_at' },
   activity_logs: { userUid: 'user_id', userId: 'user_id', action: 'action', category: 'category', entityName: 'target', target: 'target', type: 'type', timestamp: 'created_at', createdAt: 'created_at' },
   jobs_req: { email: 'email', phone: 'phone', status: 'status', category: 'category', refCode: 'ref_code', createdAt: 'created_at' },
   announcements: { title: 'title', isActive: 'is_active', priority: 'priority', createdBy: 'created_by', createdAt: 'created_at' },
@@ -28,12 +37,14 @@ export const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   products: { productId: 'product_id', product_id: 'product_id', productNameAr: 'product_name_ar', product_name_ar: 'product_name_ar', productNameEn: 'product_name_en', product_name_en: 'product_name_en', productUrl: 'product_url', product_url: 'product_url', productPriceCurrency: 'product_price_currency', product_price_currency: 'product_price_currency', unitPrice: 'unit_price', unit_price: 'unit_price', itemCategoryId: 'item_category_id', item_category_id: 'item_category_id', isAllowed: 'is_allowed', is_allowed: 'is_allowed', cbm: 'cbm', width: 'width', height: 'height', length: 'length', weight: 'weight', createdAt: 'created_at', created_at: 'created_at', createdBy: 'created_by', created_by: 'created_by', updatedAt: 'updated_at', updated_at: 'updated_at', updatedBy: 'updated_by', updated_by: 'updated_by' },
   order_items: { orderItemId: 'order_item_id', order_item_id: 'order_item_id', itemsId: 'order_item_id', items_id: 'order_item_id', orderId: 'order_id', order_id: 'order_id', productId: 'product_id', product_id: 'product_id', productPrice: 'product_price', product_price: 'product_price', productUrl: 'product_url', product_url: 'product_url', trackingNumber: 'tracking_number', tracking_number: 'tracking_number', producSourceId: 'produc_source_id', produc_source_id: 'produc_source_id', producSourceUrl: 'produc_source_url', produc_source_url: 'produc_source_url', productCooler: 'product_cooler', product_cooler: 'product_cooler', nota: 'nota', quantity: 'quantity', totalPrice: 'total_price', total_price: 'total_price', totalWeight: 'total__weight', total_weight: 'total__weight', total__weight: 'total__weight', totalCbm: 'total_cbm', total_cbm: 'total_cbm', packagingOptionId: 'packaging_option_id', packaging_option_id: 'packaging_option_id', packagingOptionPrice: 'packaging_option_price', packaging_option_price: 'packaging_option_price', isInsured: 'is_insured', is_insured: 'is_insured', insuranceFee: 'insurance_fee', insurance_fee: 'insurance_fee', itemsStatus: 'items_status', items_status: 'items_status', createdAt: 'created_at', created_at: 'created_at', createdBy: 'created_by', created_by: 'created_by', updatedAt: 'updated_at', updated_at: 'updated_at', updatedBy: 'updated_by', updated_by: 'updated_by' },
   shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompanyId: 'shipping_company_id', shipping_company_id: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', shippingCategoryId: 'shipping_category_id', shipping_category_id: 'shipping_category_id', contentCategoryId: 'content_category_id', content_category_id: 'content_category_id', contentCategoryName: 'content_category_name', cartonCount: 'carton_count', customsFee: 'customs_fee', taxFee: 'tax_fee', otherCategoryFee: 'other_category_fee', categoryFeesTotal: 'category_fees_total', categoryFeeCurrency: 'category_fee_currency', createdAt: 'created_at' },
-  orders_history: { orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', mainEntryId: 'main_entry_id', main_entry_id: 'main_entry_id', accountTransCount: 'account_trans_count', accountTransId: 'account_trans_id', activityLogId: 'activity_log_id', eventType: 'event_type', eventCategory: 'event_category', operation: 'operation', entityType: 'entity_type', actorId: 'actor_id', actorName: 'actor_name', actorRole: 'actor_role', source: 'source', summary: 'summary', beforeData: 'before_data', afterData: 'after_data', metadata: 'metadata', occurredAt: 'occurred_at', createdAt: 'created_at' },
+  // اللقطات النصية (before_data/after_data/metadata) صارت صفوف تغيير وحقولًا مسطّحة.
+  // The snapshot blobs became change rows plus flat columns.
+  orders_history: { orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', mainEntryId: 'main_entry_id', main_entry_id: 'main_entry_id', accountTransCount: 'account_trans_count', accountTransId: 'account_trans_id', activityLogId: 'activity_log_id', eventType: 'event_type', eventCategory: 'event_category', operation: 'operation', entityType: 'entity_type', actorId: 'actor_id', actorName: 'actor_name', actorRole: 'actor_role', source: 'source', summary: 'summary', changedFields: 'changed_fields', triggerName: 'trigger_name', orderReference: 'order_reference', deletedOrderId: 'deleted_order_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id', statusId: 'status_id', isAutomatic: 'is_automatic', activityAction: 'activity_action', activityTarget: 'activity_target', activityDetails: 'activity_details', occurredAt: 'occurred_at', createdAt: 'created_at' },
   order_status: { nameAr: 'name_ar', nameEn: 'name_en', isFirst: 'is_first', isLast: 'is_last', sortOrder: 'sort_order', color: 'color', code: 'code' },
   auto_entries: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source', amountSources: 'amount_sources', amountStrategy: 'amount_strategy', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', skipWhenZero: 'skip_when_zero' },
   autoEntry: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source', amountSources: 'amount_sources', amountStrategy: 'amount_strategy', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', skipWhenZero: 'skip_when_zero' },
   order_option: { nameAr: 'name_ar', nameEn: 'name_en', type: 'type', price: 'price', duration: 'duration', details: 'details', code: 'code', isActive: 'is_active', is_active: 'is_active' },
-  items_category: { code: 'code', nameAr: 'name_ar', nameEn: 'name_en', description: 'description', details: 'details', hsCodeHint: 'hs_code_hint', customsPerCarton: 'customs_per_carton', taxPerCarton: 'tax_per_carton', otherFeesPerCarton: 'other_fees_per_carton', customsRate: 'customs_rate', taxRate: 'tax_rate', feeCurrency: 'fee_currency', requiresReview: 'requires_review', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
+  items_category: { code: 'code', nameAr: 'name_ar', nameEn: 'name_en', description: 'description', group: 'group_name', groupName: 'group_name', requiresHighValueReview: 'requires_high_value_review', requiresHazardReview: 'requires_hazard_review', hsCodeHint: 'hs_code_hint', customsPerCarton: 'customs_per_carton', taxPerCarton: 'tax_per_carton', otherFeesPerCarton: 'other_fees_per_carton', customsRate: 'customs_rate', taxRate: 'tax_rate', feeCurrency: 'fee_currency', requiresReview: 'requires_review', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
   entry_module: { code: 'code', nameAr: 'name_ar', nameEn: 'name_en', note: 'note', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid' },
   entry_type: { code: 'code', moduleId: 'module_id', nameAr: 'name_ar', nameEn: 'name_en', note: 'note', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid' },
   main_entry: { entryNumber: 'entry_number', moduleId: 'module_id', entryTypeId: 'entry_type_id', entryCategory: 'entry_category', postingStatus: 'posting_status', amountOriginal: 'amount_original', amountText: 'amount_text', currencyOriginalNo: 'currency_original_no', currencyPriceId: 'currency_price_id', currencyPriceSeq: 'currency_price_seq', description: 'description', notes: 'notes', attachments: 'attachments', paymentMethod: 'payment_method', orderId: 'order_id', shipmentId: 'shipment_id', custodyId: 'custody_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id', isAutomatic: 'is_automatic', reversesEntryId: 'reverses_entry_id', effectiveAt: 'effective_at', postedAt: 'posted_at', voidedAt: 'voided_at', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid', postedByUid: 'posted_by_uid', voidedByUid: 'voided_by_uid' },
@@ -102,23 +113,8 @@ export function getTablePrimaryKey(table: string): string {
   return TABLE_PRIMARY_KEY_MAP[table] || `${table.endsWith('s') ? table.slice(0, -1) : table}_id`;
 }
 
-// قائمة الجداول المالية العلاقاتية ذات الأعمدة المباشرة فقط (بدون حقل data jsonb)
-// Relational financial tables using explicit columns only (no data jsonb column)
-const EXPLICIT_FINANCIAL_TABLES = new Set([
-  'account', 'acc_main', 'acc_sub', 'acc_sub_group', 'default_accounts', 'account_id_migration_map',
-  'accounts', 'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
-  'financial_legacy_migration_map', 'financial_migration_exceptions', 'users', 'products', 'order_items',
-  'returned_products', 'sessions',
-  // These entity tables no longer have a data JSONB column after phase 8.
-  'customers', 'couriers', 'employees', 'sources', 'shipping_companies', 'assets'
-  //  'announcements', 'portal_users', 'sources',
-  // 'couriers', 'customers', 'employees', 'activity_logs', 'notifications', 'jobs_req', 'portal_tickets',
-  // 'shipments', 'orders_history', 'order_status', 'auto_entries', 'shipping_companies', 'assets',
-]);
-
-export function usesExplicitFinancialColumns(table: string): boolean {
-  return EXPLICIT_FINANCIAL_TABLES.has(table);
-}
+// كل الجداول تُكتب بأعمدتها الرئيسية: لم يعد أي جدول يحمل عمود payload نصيًا.
+// Every table writes its own first-class columns: no table keeps a payload document any more.
 
 /**
  * استخراج الأعمدة المباشرة المجهزة لقاعدة البيانات بنظافة وأمان

@@ -6,7 +6,13 @@ vi.mock('../data/http/api-client', () => ({
   ApiClient: vi.fn(() => ({ get })),
 }));
 
-import { orderHistoryService } from './orderHistoryService';
+import {
+  historyChangeValue,
+  historyChangesAsRecord,
+  historyEventChanges,
+  historyEventDetailFields,
+  orderHistoryService,
+} from './orderHistoryService';
 
 const envelope = (rows: Array<Record<string, unknown>>) => ({ success: true as const, data: rows });
 
@@ -72,5 +78,65 @@ describe('orderHistoryService', () => {
     expect(get).toHaveBeenCalledWith('/api/v1/orders', { search: 'ALX-1', limit: 20, offset: 0 });
     expect(get).toHaveBeenCalledWith('/api/v1/orders/ord_1/history', undefined);
     expect(events.map((event) => event.id)).toEqual(['created']);
+  });
+
+  it('يقرأ الحقول المسطّحة من API بدل لقطات jsonb المحذوفة', async () => {
+    get.mockResolvedValueOnce(envelope([
+      {
+        historyId: 'hist_flat',
+        eventType: 'order.status_changed',
+        eventCategory: 'order',
+        summary: 'تم تغيير حالة الطلب.',
+        changedFields: ['status', 'orderStatusId'],
+        changes: [
+          { fieldName: 'status', oldValue: 'قيد الطلب', newValue: 'تم الشحن' },
+          { fieldName: 'orderStatusId', oldValue: '2', newValue: '5' },
+        ],
+        triggerName: 'orders_activity',
+        orderReference: 'ALX-1',
+        occurredAt: '2026-08-22T09:00:00.000Z',
+      },
+    ]));
+
+    const [event] = await orderHistoryService.listForContext({ entityType: 'order', orderId: 'ord_1', label: 'ALX-1' });
+
+    expect(event.changedFields).toEqual(['status', 'orderStatusId']);
+    expect(event.changes).toHaveLength(2);
+    expect(event.triggerName).toBe('orders_activity');
+    expect(event.orderReference).toBe('ALX-1');
+    expect(historyChangeValue(event, 'order_status_id')).toBe('5');
+    expect(historyChangesAsRecord(event, 'oldValue')).toEqual({ status: 'قيد الطلب', orderStatusId: '2' });
+    expect(historyEventDetailFields(event)).toMatchObject({ triggerName: 'orders_activity', orderReference: 'ALX-1' });
+  });
+
+  it('يقبل القراءة المباشرة بكتابة قاعدة البيانات: changed_fields وصفوف orders_history_change', async () => {
+    get.mockResolvedValueOnce(envelope([
+      {
+        orders_history_id: 'oh_direct',
+        event_type: 'order.updated',
+        event_category: 'order',
+        operation: 'update',
+        entity_type: 'order',
+        changed_fields: '{weight,customerName}',
+        orders_history_change: [
+          { field_name: 'data.weight', old_value: '12', new_value: '18' },
+        ],
+        activity_details: '{"userName":"سارة"}',
+        is_automatic: false,
+        occurred_at: '2026-08-23T09:00:00.000Z',
+      },
+    ]));
+
+    const [event] = await orderHistoryService.listForContext({ entityType: 'order', orderId: 'ord_1', label: 'ALX-1' });
+
+    expect(event.id).toBe('oh_direct');
+    expect(event.eventType).toBe('order.updated');
+    expect(event.changedFields).toEqual(['weight', 'customerName']);
+    expect(event.changes).toEqual([{ fieldName: 'data.weight', oldValue: '12', newValue: '18' }]);
+    expect(event.activityDetails).toEqual({ userName: 'سارة' });
+    expect(event.isAutomatic).toBe(false);
+    // الحقل المعلن بلا صف تغيير يظهر بقيم فارغة، والمسار القديم data. لا يكرّر الصف الموجود.
+    // A declared field with no change row still shows (empty values), and the legacy data. path does not duplicate it.
+    expect(historyEventChanges(event).map((change) => change.fieldName)).toEqual(['data.weight', 'customerName']);
   });
 });

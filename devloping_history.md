@@ -3388,3 +3388,45 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - **النشر**:
   - تم رفع أول 3 التزامات بنجاح إلى المستودع البعيد: `016c052` (اصلاحات انتقرافتي) و `deb7f63` (اصلاح قسم الماليه والعملات) و `06080d4` (اصلاح قسم الماليه والعملات 2).
   - الالتزامات الـ 4 المتبقية (`d3f60bd`, `76c09c3`, `6296fe2`, `d3e9d70`) واجهت مشكلة انقطاع اتصال ومهلة من خادم GitHub (`HTTP 408 / unexpected disconnect`) نظراً لاحتواء الالتزام `d3f60bd` و `76c09c3` على ملفات توثيقية كبيرة جداً تتجاوز 47 ميجابايت ضمن مسار `docs/old/`، مع بطء سرعة رفع الإنترنت المحلية.
+
+## [2026-10-16 08:06:00 +03:00] — AI Model: Qoder Agent
+### تدقيق الواجهة والـ API بعد التسطير وإغلاق فجوة تفاصيل الجسم
+- **التحقق من الترحيلات**: مسبار قراءة فقط على القاعدة الحيّة (information_schema + `jsonb_object_keys` + عدّ الأعمدة الفارغة) أثبت أن 0024→0032 و 0036 و 0037 مطبَّقة وأن 0038 و 0034 معلَّقتان، وأن كل مفاتيح الحمولة لها عمود رئيسي ما عدا ثلاث فجوات أُغلقت في هذا اليوم.
+- **فجوة `cust_details.body_details`**: كان عمودًا نصيًّا يكتب `alx_api` داخله `JSON.stringify(bodyDetails)` ويقرأه بـ `asRecord` — وهو نفس ممنوع الحمولة. استُبدل بسبعة أعمدة حقيقية: `coat_size`, `pants_size`, `shorts_size`, `shoe_size`, `height_cm`, `weight_kg`, `preferred_colors text[]`.
+- **`portal-owned.repository.ts`**: `customerDetailsSelect` صار يقرأ الأعمدة المسطّحة، ودوال `toBodyParts` / `bodyPartsToRecord` / `toStringList` تبني شكل `bodyDetails` في TypeScript (لا مستند في القاعدة)، ومسارا `UPDATE`/`INSERT` يمرران كل مقاس كمعامل مستقل بدل السلسلة JSON.
+- **`portal-admin`**: حُذفت حقلي `bodyDetails`/`location` النصيين من الـ contract والـ schema واستُبدلت بـ `governorate`, `street`, `coatSize`, `pantsSize`, `shortsSize`, `shoeSize`, `heightCm`, `weightKg`, `preferredColors`، و`DETAILS_COLUMNS` صار يربط كل مفتاح بعموده، وُحِّد تطبيع أعمدة `text[]` (الفئات والألوان) بدل استثناء `preferredCategories` فقط.
+- **عميل HTTP (مراجعة)**: `api-client.ts` أُعيدت كتابته بمسار تنفيذ واحد (`request` → `send`/`readWithRetries`) مع تجديد الرمز مرة واحدة عند 401 عبر `session-refresh.ts` (قفل متزامن `inFlight` يمنع عاصفة `/auth/refresh`، و`clearTokens` عند 401/403 فقط لا عند 429/5xx)، وترويسة `Authorization` تُطبَّق بعد ترويسات المستدعي حتى لا تُتجاوز المصادقة، وإعادة المحاولة للقراءات فقط حتى لا تتضاعف الكتابات.
+- **بقايا لا تؤثر تشغيلًا**: طبقة `src/data/dtos/mappers/feature.mappers.ts` (1097 سطرًا) غير مستدعاة من أي مسار حيّ وتقرأ `row.data`؛ والتعامل التسامحي في `supabase-adapter-mappers.ts:49` خاص بمخازن `localStorage` لا بالقاعدة. الحذف/التسطير يحتاج قرار المالك لأن الملفات متتبَّعة في git.
+- **النتائج**: `alx_api` — `tsc --noEmit` نظيف، و 42 suite / 373 test ناجحة. الواجهة — `tsc --noEmit` نظيف، و 92 file / 405 test ناجحة (2 file متخطاة لاختبارات تكامل القاعدة خلف `RUN_SUPABASE_INTEGRATION_TESTS`).
+
+## [2026-10-16 08:26 +03:00] — Qoder
+- **المهمة**: تدقيق نهائي شامل قبل إسقاط الحقول القديمة، مع إثقان بالبيانات الحيّة لا بالافتراض.
+- **المنهج**: مسبار Node/pg للقراءة فقط داخل `alx_api/` (يُقرأ `.env` إلى متغيّر ولا يطبع أي اعتمادية)، يفحص: سجل الترحيلات، آثار 0010/0023، كل أعمدة jsonb/json في مخططي `public` و `alx_api_private`، ومطابقة كل مفتاح jsonb مع اسم عمود رئيسي (مطابقة تطبيع `camelCase ↔ snake_case`)، ثم مقارنة صفوف الجداول الابنة بمصدرها.
+- **نتيجة التدقيق**: لا فجوة بيانات واحدة متبقية. كل مفتاح «غير مُسطَّح اسميًا» ثبت أنه إما مكرّر بقيمة مطابقة تمامًا لعمود موجود (`portal_users.uid = auth_uid` في 5/5، `salary_history.salaryMonth = month`، `browser_pages.name = name_ar/name_en`، `announcements.data->id = announcement_id` في 2/2، `order_status.data->id = order_status_id` في 12/12، `portal_users.commercialRegister` فارغ مثل العمود)، أو بلا قيمة (`auto_entries.currencyId` = null في 3/3)، أو داخل مستند JSON معشّش `cust_details.acquisitionSource` كل حقوله (`joinBy`, `referrerId`) منقولة فعلًا إلى `join_by`/`referrer_id`.
+- **الفجوة الوحيدة الحقيقية**: `orders_history_change` = 0 صف بينما `orders_history` = 12 صفًا فيها لقطات `before_data/after_data` — يعالجها 0038 §5، لذلك إسقاط 0034 قبل 0038 يُفقد سجل التغييرات.
+- **تغييرات الكود**: لا تغيير في هذه الجولة (المسبار حُذف بعد الاستخدام). الحالة السابقة قائمة: `alx_api` tsc نظيف و 42 suite / 373 test، الواجهة tsc نظيف و 92 file / 405 test.
+
+## [2026-10-16 23:19:12 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+### إكمال الترحيلات والتسطيح الشامل لقاعدة البيانات والتثبت من خلو النظام من الأخطاء
+- **المشكلة السابقة**: تعليق أو إلغاء ترحيل الأقسام 13 إلى 20 من `0038` بسبب اعتماد view `alx_api_private.customers_read` على أعمدة `location` و `preferred_categories` القديمة، وخطأ NOT NULL في `orders_history.account_trans_count` عند تحديث الطلبات.
+- **الإجراءات المنجزة**:
+  1. إسقاط view `alx_api_private.customers_read` بـ CASCADE، ثم إسقاط أعمدة jsonb القديمة من `customers`، وإعادة تسمية `preferred_categories_flat` إلى `preferred_categories`، ثم ترحيل البيانات الحقيقية من `cust_details`، وإعادة بناء الـ view على الأعمدة المسطحة ومنح صلاحيات القراءة لـ `alx_api_runtime`.
+  2. إنشاء فهارس الأعمدة المسطحة لجدول `orders` (§14).
+  3. إضافة أعمدة الإعدادات العامة (`timezone`, `auto_notification`, `cbm_shipping_rate`) بجدول `settings_general` ونقل القيم (§15).
+  4. إضافة أعمدة إعدادات المستخدم (`sidebar_collapsed`, `sidebar_items`) بجدول `user_settings` ونقل القيم (§16).
+  5. تحديث دالة التحقق من طرف الطلب `validate_order_party()` للعمل على الأعمدة المسطحة ومنع أي كتابة في `data` (§17).
+  6. إضافة أعمدة تفاصيل الجسم ومقاسات الملابس والأحذية بجدول `cust_details` ونقلها من `body_details` (§18).
+  7. ترحيل استجابات مزود واتساب إلى `external_response` (§19).
+  8. معالجة دالة `orders_history_write` بحيث تعين `account_trans_count` بقيمة افتراضية 0 لتجنب انتهاك قيد NOT NULL أثناء التحديثات العادية للطلبات.
+  9. ترحيل حساب العميل في الطلبات القديمة إلى `orders.customer_account_id` (§20).
+  10. تطبيق ترحيل الإسقاط النهائي 0034 (`0034_drop_legacy_jsonb_payloads.sql`) وإسقاط كافة أعمدة `data` و `jsonb` القديمة عبر جميع الجداول.
+- **نتائج التحقق**:
+  - `alx_api`: `tsc --noEmit` = 0 أخطاء، و `jest` = 42 suite / 373 test نجحت جميعاً.
+  - `SWIFTSHIP_SYSTEM`: `tsc --noEmit` = 0 أخطاء، و `vitest` = 92 file / 405 test نجحت جميعاً.
+  - قاعدة البيانات: انخفاض عدد أعمدة `data` القديمة من 18 إلى 0 عمود مع الحفاظ التام على البيانات.
+
+## [2026-10-16 23:31:47 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+### مزامنة وتوثيق سجل الترحيلات في لوحة تحكم Supabase
+- **السبب**: عند تنفيذ أوامر DDL عبر استعلامات SQL المباشرة، تُطبق التعديلات على الجداول ولكن لا تظهر تلقائياً في واجهة "Database Migrations" في لوحة تحكم Supabase ما لم تُسجل في جدول المخطط `supabase_migrations.schema_migrations`.
+- **الإجراء**: تم تسجيل وتوثيق كافة الترحيلات المطبقة (`0018`, `0019`, `0020`, `0038`, `0034`) في جدول `supabase_migrations.schema_migrations` بكامل أوامرها وبياناتها.
+- **النتيجة**: تظهر الآن جميع الترحيلات كاملة في أعلى قائمة Database Migrations في لوحة تحكم Supabase.

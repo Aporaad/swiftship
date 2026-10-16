@@ -31,7 +31,7 @@ import type { EmployeesApiDto, EmployeesDatabaseRow } from '../employees.dto';
 import type { AccountingApiDto, AccountingDatabaseRow, CurrencyApiDto, CurrencyDatabaseRow, CurrencyPriceApiDto, CurrencyPriceDatabaseRow, CustodyAdvanceApiDto, CustodyAdvanceDatabaseRow } from '../accounting.dto';
 import type { AccountTransactionDatabaseRow, EntryPaymentDetailDatabaseRow, FinanceEntryDatabaseRow, FinanceEntryApiDto, FinanceEntryLineDto, FinanceEntryPaymentDetailDto } from '../finance-entries.dto';
 import type { ConvertedAmount, CurrencyCode, OriginalAmount } from '../../../shared/contracts/value-primitives';
-import type { ActivityLogApiDto, ActivityLogDatabaseRow, NotificationPayload, NotificationsApiDto, NotificationsDatabaseRow } from '../notifications.dto';
+import type { ActivityLogApiDto, ActivityLogDatabaseRow, ActivityLogDetailRow, NotificationsApiDto, NotificationsDatabaseRow } from '../notifications.dto';
 import type { ReportPrintTemplateData, ReportSettingsApiDto, ReportSettingsDatabaseRow, ReportTemplateApiDto, ReportTemplateDatabaseRow } from '../reports.dto';
 import type { AnnouncementContent, JobApplicationData, JobRequestApiDto, JobRequestDatabaseRow, PortalTicketApiDto, PortalTicketDatabaseRow, SiteManagementApiDto, SiteManagementDatabaseRow } from '../site-management.dto';
 import type { OrderOptionApiDto, OrderOptionDatabaseRow, OrderStatusApiDto, OrderStatusDatabaseRow, SettingsApiDto, SettingsDatabaseRow, SystemSettingsData, UserSettingsApiDto, UserSettingsDatabaseRow, WhatsAppSettingsApiDto, WhatsAppSettingsDatabaseRow } from '../settings.dto';
@@ -135,14 +135,16 @@ export function mapUsersRowToDto(row: UsersDatabaseRow): UsersApiDto {
   };
 }
 
-export function mapRolesRowToDto(row: RolesDatabaseRow): RolesApiDto {
+// صلاحيات الدور تأتي من صفوف role_permission يمرّرها المستدعي، لا من عمود داخل roles.
+// Role permissions come from role_permission rows supplied by the caller, never from a roles column.
+export function mapRolesRowToDto(row: RolesDatabaseRow, permissionCodes?: readonly string[] | null): RolesApiDto {
   return {
     roleId: row.role_id,
     title: textOrNull(row.title),
     code: textOrNull(row.code),
     description: textOrNull(row.description),
     isDefault: row.is_default,
-    permissions: stringList(row.permissions),
+    permissions: stringList(permissionCodes),
     createdAt: isoOrNull(row.created_at),
     updatedAt: isoOrNull(row.updated_at),
     createdBy: textOrNull(row.created_by),
@@ -371,7 +373,11 @@ export function mapProductCategoryRowToDto(row: ProductCategoryDatabaseRow): Pro
     feeCurrency: currencyCodeOrNull(row.fee_currency),
     requiresReview: row.requires_review,
     isActive: row.is_active,
-    details: safeRecord(row.details),
+    // مجموعة الفئة وأعلام المراجعة أعمدة مسطّحة؛ لم يعد هناك عمود details مفهرس.
+    // Group and review flags are flat columns; the indexed details column is gone.
+    groupName: textOrNull(row.group_name),
+    requiresHighValueReview: Boolean(row.requires_high_value_review),
+    requiresHazardReview: Boolean(row.requires_hazard_review),
     createdAt: isoOrNull(row.created_at),
     updatedAt: isoOrNull(row.updated_at),
     createdBy: textOrNull(row.created_by),
@@ -747,40 +753,28 @@ export function mapFinanceEntryRowToDto(
   };
 }
 
-function mapNotificationPayload(value: unknown): NotificationPayload {
-  const data = safeRecord(value);
-  return {
-    title: textOrNull(data.title),
-    message: textOrNull(data.message),
-    link: textOrNull(data.link),
-    orderId: textOrNull(data.orderId),
-    userId: textOrNull(data.userId),
-    associatedUserIds: stringList(data.associatedUserIds),
-    isPublic: nullableBoolean(data.isPublic),
-    read: nullableBoolean(data.read),
-    category: textOrNull(data.category),
-    type: textOrNull(data.type),
-    creatorId: textOrNull(data.creatorId),
-    creatorName: textOrNull(data.creatorName),
-  };
-}
-
-export function mapNotificationsRowToDto(row: NotificationsDatabaseRow): NotificationsApiDto {
-  const payload = mapNotificationPayload(row.data);
+// الإشعار يُقرأ من أعمدة notifications المسطّحة؛ المستلمون من recipient_ids/صفوف notification_recipient.
+// Notifications read flat notifications columns; recipients come from recipient_ids or notification_recipient rows.
+export function mapNotificationsRowToDto(
+  row: NotificationsDatabaseRow,
+  recipientIds?: readonly string[] | null,
+): NotificationsApiDto {
   return {
     notificationId: row.notification_id,
     userId: textOrNull(row.user_id),
     category: textOrNull(row.category),
     isPublic: row.is_public,
-    read: row.read,
+    read: row.is_read,
     type: textOrNull(row.type),
-    title: payload.title ?? null,
-    message: payload.message ?? null,
-    link: payload.link ?? null,
-    orderId: payload.orderId ?? null,
-    associatedUserIds: payload.associatedUserIds ?? [],
-    creatorId: payload.creatorId ?? null,
-    creatorName: payload.creatorName ?? null,
+    title: textOrNull(row.title),
+    message: textOrNull(row.message),
+    // لا عمود link في notifications: يبقى الحقل في شكل الواجهة فارغًا.
+    // notifications has no link column: the UI-shape field stays empty rather than being faked.
+    link: null,
+    orderId: null,
+    associatedUserIds: stringList(recipientIds ?? row.recipient_ids),
+    creatorId: textOrNull(row.creator_id),
+    creatorName: textOrNull(row.creator_name),
     createdAt: asIsoUtc(row.created_at),
     updatedAt: isoOrNull(row.updated_at),
     createdBy: textOrNull(row.created_by),
@@ -788,19 +782,26 @@ export function mapNotificationsRowToDto(row: NotificationsDatabaseRow): Notific
   };
 }
 
-export function mapActivityLogRowToDto(row: ActivityLogDatabaseRow): ActivityLogApiDto {
-  const data = safeRecord(row.data);
+export function mapActivityLogRowToDto(
+  row: ActivityLogDatabaseRow,
+  detailRows?: readonly ActivityLogDetailRow[] | null,
+): ActivityLogApiDto {
+  const details: Record<string, unknown> = {};
+  for (const entry of detailRows ?? []) {
+    const field = textOrNull(entry?.field_name);
+    if (field) details[field] = entry?.field_value ?? null;
+  }
   return {
     activityLogId: row.activity_log_id,
     userId: textOrNull(row.user_id),
-    userName: textOrNull(data.userName),
-    userRole: textOrNull(data.userRole),
+    userName: textOrNull(row.user_name),
+    userRole: textOrNull(row.user_role),
     action: textOrNull(row.action),
     category: textOrNull(row.category),
     target: textOrNull(row.target),
     type: textOrNull(row.type),
-    details: safeRecord(data.details),
-    eventAt: isoFromLegacy(data.timestamp) ?? isoOrNull(row.created_at),
+    details,
+    eventAt: isoOrNull(row.created_at),
     createdAt: asIsoUtc(row.created_at),
     updatedAt: isoOrNull(row.updated_at),
     createdBy: textOrNull(row.created_by),
@@ -847,11 +848,22 @@ export function mapReportsRowToDto(row: ReportTemplateDatabaseRow): ReportTempla
   };
 }
 
-export function mapReportSettingsRowToDto(row: ReportSettingsDatabaseRow): ReportSettingsApiDto {
+export interface ReportExchangeRateRow {
+  currency_code?: unknown;
+  rate?: unknown;
+}
+
+// أسعار الصرف تُجمَّع من صفوف report_exchange_rate بدل عمود jsonb في report_settings.
+// Rates are assembled from report_exchange_rate rows instead of a report_settings jsonb column.
+export function mapReportSettingsRowToDto(
+  row: ReportSettingsDatabaseRow,
+  exchangeRateRows?: readonly ReportExchangeRateRow[] | null,
+): ReportSettingsApiDto {
   const rates: Record<string, number> = {};
-  for (const [code, value] of Object.entries(safeRecord(row.exchange_rates))) {
-    const rate = numberOrNull(value as number | string | null);
-    if (rate !== null) rates[code] = rate;
+  for (const entry of exchangeRateRows ?? []) {
+    const code = textOrNull(entry?.currency_code);
+    const rate = numberOrNull(entry?.rate as number | string | null);
+    if (code && rate !== null) rates[code] = rate;
   }
   return {
     reportSettingId: row.report_setting_id,

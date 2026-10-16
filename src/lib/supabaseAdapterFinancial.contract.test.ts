@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   extractDirectColumns,
   sanitizeDataPayload,
-  usesExplicitFinancialColumns,
 } from './supabase-adapter';
 
 describe('عقد محول Supabase للجداول المالية الصريحة', () => {
@@ -14,10 +13,8 @@ describe('عقد محول Supabase للجداول المالية الصريحة'
   it('يحافظ على مخطط الجداول المالية الصريحة والخرائط المباشرة', () => {
     for (const table of ['entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances']) {
       expect(columnsSource).toContain(`${table}: {`);
-      expect(usesExplicitFinancialColumns(table)).toBe(true);
     }
     expect(columnsSource).toContain("conversionRate: 'conversion_rate'");
-    expect(usesExplicitFinancialColumns('orders')).toBe(false);
     expect(extractDirectColumns('main_entry', {
       entryNumber: 'JV-123',
       amountOriginal: 125,
@@ -31,7 +28,7 @@ describe('عقد محول Supabase للجداول المالية الصريحة'
     });
   });
 
-  it('يفصل الحقول ذات الأعمدة المباشرة عن data ويحافظ على المفاتيح غير المعيّنة', () => {
+  it('يفصل الحقول ذات الأعمدة المباشرة عن بقية المفاتيح', () => {
     expect(sanitizeDataPayload('main_entry', {
       entryNumber: 'JV-123',
       amountOriginal: 125,
@@ -40,9 +37,12 @@ describe('عقد محول Supabase للجداول المالية الصريحة'
     })).toEqual({ customMemo: 'retained in payload' });
   });
 
-  it('يبقي مسار الكتابة في الواجهة العامة مشروطًا بمخطط الجدول الصريح', () => {
-    expect(adapterSource).toContain(
-      'usesExplicitFinancialColumns(table) ? { [pkCol]: id, ...directCols } : { [pkCol]: id, ...directCols, data }',
-    );
+  // لا عمود payload في قاعدة البيانات: مسار الكتابة يرسل الأعمدة الرئيسية وحدها.
+  // No payload column exists in the database: every write path sends first-class columns only.
+  it('يمنع كتابة أي عمود حمولة في أي مسار من مسارات الحفظ', () => {
+    for (const dropped of ['before_data', 'after_data', 'metadata', 'permissions', 'associated_user_ids', 'exchange_rates']) {
+      expect(columnsSource).not.toContain(`: '${dropped}'`);
+    }
+    expect(adapterSource).not.toMatch(/\.(insert|upsert|update)\([^)]*\bdata\b/);
   });
 });

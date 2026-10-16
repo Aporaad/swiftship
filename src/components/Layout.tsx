@@ -266,19 +266,19 @@ export default function Layout() {
     const fetchPendingPortal = async () => {
       try {
         const { data } = await supabase.from('portal_users').select(SELECT_FIELDS.portalUser);
-        const rows = (data || []).map((row: any) => {
-          const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-          return { id: row.id, ...payload };
+        // البوابات تُطبّع الأعمدة المسطّحة إلى camelCase أحيانًا، لذا تُقرأ الحالتان معًا.
+        // Gateways sometimes normalise flat columns to camelCase, so both spellings are accepted.
+        const pending = (data || []).filter((row: any) => {
+          const status = row.approval_status ?? row.approvalStatus;
+          return status === 'pending_approval';
         });
-        const pending = rows.filter((u: any) => u.approvalStatus === 'pending_approval' || u.approval_status === 'pending_approval');
         setPendingPortalCount(pending.length);
 
         const { data: jData } = await supabase.from('jobs_req').select(SELECT_FIELDS.jobRequest);
-        const jRows = (jData || []).map((row: any) => {
-          const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-          return { id: row.id, ...payload };
+        const jPending = (jData || []).filter((row: any) => {
+          const status = row.status ?? '';
+          return !status || status === 'pending_review';
         });
-        const jPending = jRows.filter((j: any) => (j.status || 'pending_review') === 'pending_review');
         setPendingJobsCount(jPending.length);
       } catch (_) { }
     };

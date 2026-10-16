@@ -36,7 +36,11 @@ export interface ProductCategoryDatabaseRow {
   fee_currency: string | null;
   requires_review: boolean;
   is_active: boolean;
-  details: unknown;
+  // أعمدة items_category المسطّحة بدل عمود details المفهرس (الترحيل 0034).
+  // Flat items_category columns replacing the indexed details column (migration 0034).
+  group_name: string | null;
+  requires_high_value_review: boolean;
+  requires_hazard_review: boolean;
   created_at: string | null;
   updated_at: string | null;
   created_by: string | null;
@@ -132,7 +136,11 @@ export interface ProductCategoryApiDto {
   feeCurrency: CurrencyCode | null;
   requiresReview: boolean;
   isActive: boolean;
-  details: Record<string, unknown>;
+  // مجموعة الفئة وأعلام المراجعة قيم مسطّحة قادمة من أعمدة items_category الحقيقية.
+  // Category group and review flags are flat values sourced from real items_category columns.
+  groupName: string | null;
+  requiresHighValueReview: boolean;
+  requiresHazardReview: boolean;
   createdAt: IsoUtcString | null;
   updatedAt: IsoUtcString | null;
   createdBy: string | null;
@@ -208,7 +216,7 @@ export interface ProductsCreateInput {
   weight?: number | null;
 }
 export type ProductsUpdateInput = Partial<ProductsCreateInput>;
-export type ProductCategoryCreateInput = Omit<ProductCategoryApiDto, 'categoryId' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy' | 'details'> & { details?: Record<string, unknown> };
+export type ProductCategoryCreateInput = Omit<ProductCategoryApiDto, 'categoryId' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'> & { groupName?: string | null; requiresHighValueReview?: boolean; requiresHazardReview?: boolean };
 export type OrderItemCreateInput = Omit<OrderItemApiDto, 'orderItemId' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>;
 export type ReturnedProductCreateInput = Omit<ReturnedProductApiDto, 'returnId' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>;
 export type ProductsViewModel = Partial<ProductsApiDto> & Pick<ProductsApiDto, 'productId'>;

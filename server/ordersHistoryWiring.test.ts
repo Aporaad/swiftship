@@ -27,12 +27,22 @@ describe('orders history UI wiring', () => {
     expect(historyModal).toContain('سجل الأحداث والتغييرات');
     expect(historyModal).toContain('تفاصيل التغييرات');
     expect(historyModal).toContain('كل صف يمثل حدثًا واحدًا');
-    expect(historyModal).toContain('metadata?.changes');
+    // الصفوف المسطّحة هي المصدر: changes بـ fieldName/oldValue/newValue و changedFields للحقول المعلنة.
+    // The flat rows are the source: changes carry fieldName/oldValue/newValue, changedFields names the touched fields.
+    expect(historyModal).toContain('historyEventChanges');
+    expect(historyModal).toContain('change.fieldName');
+    expect(historyModal).toContain('change.oldValue');
+    expect(historyModal).toContain('change.newValue');
     expect(historyModal).toContain('القيمة السابقة');
     expect(historyModal).toContain('القيمة الجديدة');
     expect(historyModal).toContain('aria-label={isAr ? \'سجل الأحداث والتغييرات\'');
-    expect(historyModal).toContain('beforeData');
-    expect(historyModal).toContain('afterData');
+    // لقطات jsonb لم تعد تُقرأ في الواجهة بعد إسقاط before_data/after_data/metadata.
+    // The UI no longer reads jsonb snapshots now that before_data/after_data/metadata are dropped.
+    expect(historyModal).not.toContain('beforeData');
+    expect(historyModal).not.toContain('afterData');
+    expect(historyModal).not.toContain('event.metadata');
+    expect(historyModal).toContain('historyChangesAsRecord');
+    expect(historyModal).toContain('historyEventDetailFields');
     expect(historyModal).toContain('actorName');
   });
 

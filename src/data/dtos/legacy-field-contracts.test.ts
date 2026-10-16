@@ -85,19 +85,19 @@ describe('legacy feature field projections', () => {
     expect(dto.shipmentData).toEqual({ shippingType: 'air', shippingSource: 'China', shippingDestination: 'Yemen', packagingFees: 12, shippingDate: '2026-09-20', shippingDuration: '14 days', expectedArrival: '2026-10-04', deliveryDate: '2026-10-05', notes: 'Fragile', shippingCategoryName: 'Express', shippingCategoryPrice: 30 });
   });
 
-  it('preserves category details used by the legacy product-category editor', () => {
+  it('projects the flat items_category group and review columns onto the category dto', () => {
     const dto = mapProductCategoryRowToDto(asRow<ProductCategoryDatabaseRow>({
-      items_category_id: 'category-1', details: { packageType: 'carton', requiresPhoto: true, notes: 'special handling' },
+      items_category_id: 'category-1', group_name: 'Fragile', requires_high_value_review: true, requires_hazard_review: false,
     }));
-    expect(dto.details).toEqual({ packageType: 'carton', requiresPhoto: true, notes: 'special handling' });
+    expect(dto).toMatchObject({ categoryId: 'category-1', groupName: 'Fragile', requiresHighValueReview: true, requiresHazardReview: false });
   });
 
-  it('keeps all allowlisted notification payload values and associated users', () => {
+  it('keeps notification values read from the flat notifications columns', () => {
     const dto = mapNotificationsRowToDto(asRow<NotificationsDatabaseRow>({
-      notification_id: 'notification-1', created_at: timestamp, is_public: false, read: false,
-      data: { title: 'Order update', message: 'Ready', link: '/orders/1', orderId: 'order-1', userId: 'user-1', associatedUserIds: ['user-2', 'user-3'], category: 'order', type: 'info', creatorId: 'user-1', creatorName: 'Operator' },
+      notification_id: 'notification-1', created_at: timestamp, is_public: false, is_read: false,
+      title: 'Order update', message: 'Ready', user_id: 'user-1', recipient_ids: ['user-2', 'user-3'], category: 'order', type: 'info', creator_id: 'user-1', creator_name: 'Operator',
     }));
-    expect(dto).toMatchObject({ title: 'Order update', message: 'Ready', link: '/orders/1', orderId: 'order-1', associatedUserIds: ['user-2', 'user-3'], creatorId: 'user-1', creatorName: 'Operator' });
+    expect(dto).toMatchObject({ title: 'Order update', message: 'Ready', associatedUserIds: ['user-2', 'user-3'], creatorId: 'user-1', creatorName: 'Operator', read: false });
   });
 
   it('retains job-application fields from job_requests.data', () => {
@@ -116,12 +116,15 @@ describe('legacy feature field projections', () => {
     expect(dto.ticket).toMatchObject({ subject: 'Help', userName: 'Client', userEmail: 'client@example.test', message: 'Need support', replies: [{ id: 'reply-1', sender: 'staff', message: 'We are looking', createdAt: timestamp }] });
   });
 
-  it('retains the user-defined details in activity-log data', () => {
-    const dto = mapActivityLogRowToDto(asRow<ActivityLogDatabaseRow>({
-      activity_log_id: 'activity-1', created_at: timestamp,
-      data: { userName: 'Operator', userRole: 'admin', timestamp, details: { orderId: 'order-1', amount: 42 } },
-    }));
-    expect(dto).toMatchObject({ userName: 'Operator', userRole: 'admin', details: { orderId: 'order-1', amount: 42 }, eventAt: timestamp });
+  it('reads activity user fields from columns and details from activity_log_detail rows', () => {
+    const dto = mapActivityLogRowToDto(
+      asRow<ActivityLogDatabaseRow>({
+        activity_log_id: 'activity-1', created_at: timestamp, user_name: 'Operator', user_role: 'admin',
+        summary: 'Updated order', details: 'manual note',
+      }),
+      [{ field_name: 'orderId', field_value: 'order-1' }, { field_name: 'amount', field_value: '42' }],
+    );
+    expect(dto).toMatchObject({ userName: 'Operator', userRole: 'admin', details: { orderId: 'order-1', amount: '42' }, eventAt: timestamp });
   });
 
   it('preserves attachments associated with finance entries without dropping notes', () => {

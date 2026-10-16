@@ -4,19 +4,30 @@ import { X, Check, ShieldAlert, UserCheck, RefreshCw } from 'lucide-react';
 import { supabase, doc, updateDoc, setDoc, db } from '../data/legacy/legacy-compat.ts';
 import { financialAccountService } from '../services/financialAccountService';
 
-function extractRows(data: any[]): any[] {
-  return (data || []).map(row => {
-    const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-    return {
-      id: row.portal_user_id || row.id,
-      ...payload,
-      fullName: row.full_name || payload.fullName || '',
-      linkedCustomerId: row.linked_customer_id || payload.customerId || '',
-      accountId: row.account_id || '',
-      portalRole: row.portal_role || payload.portalRole,
-      approvalStatus: row.approval_status || payload.approvalStatus,
-    };
-  });
+/**
+ * حسابات البوابة تُقرأ من أعمدة portal_users المسطّحة — لم يعد موجودًا أي عمود payload.
+ * Portal accounts are projected from the flat portal_users columns; no payload column survives.
+ * ملاحظة: portal_users لا يملك عمود مدينة، لذا يبقى العرض على address وحده.
+ * Note: portal_users has no city column, so the location line can only use address.
+ */
+function extractRows(rows: any[]): any[] {
+  const text = (value: unknown) => (typeof value === 'string' ? value : value == null ? '' : String(value));
+  return (rows || []).map((row: any) => ({
+    id: String(row.portal_user_id ?? row.id ?? ''),
+    fullName: text(row.full_name),
+    linkedCustomerId: text(row.linked_customer_id),
+    portalRole: text(row.portal_role),
+    approvalStatus: text(row.approval_status),
+    username: text(row.username),
+    email: text(row.email),
+    phone: text(row.phone),
+    address: text(row.address),
+    notes: text(row.notes),
+    type: text(row.type),
+    disabled: Boolean(row.disabled ?? row.is_disabled),
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  }));
 }
 
 export default function PendingPortalApprovalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -47,16 +58,11 @@ export default function PendingPortalApprovalsModal({ isOpen, onClose }: { isOpe
       const userRole = user.portalRole || user.portal_role;
       const targetEntityId = user.linkedCustomerId || user.id;
 
-      // 1. Update portal_users table status to approved
-      const existingUserDoc = pendingUsers.find(u => u.id === user.id) || {};
-      const updatedUserPayload = {
-        ...existingUserDoc,
-        approvalStatus: 'approved',
+      // 1. Update portal_users table status to approved (flat approval_status column)
+      await supabase.from('portal_users').update({
         approval_status: 'approved',
-        updatedAt: Date.now()
-      };
-      const { id: _, ...cleanPayload } = updatedUserPayload;
-      await supabase.from('portal_users').update({ data: cleanPayload }).eq('portal_user_id', user.id);
+        updated_at: new Date().toISOString(),
+      }).eq('portal_user_id', user.id);
 
       // 2. If Courier, activate courier record in main system couriers collection & ensure financial account
       if (userRole === 'courier') {
@@ -106,15 +112,12 @@ export default function PendingPortalApprovalsModal({ isOpen, onClose }: { isOpe
   const handleReject = async (userId: string) => {
     setActioningId(userId);
     try {
-      const existingUserDoc = pendingUsers.find(u => u.id === userId) || {};
-      const updatedUserPayload = {
-        ...existingUserDoc,
-        approvalStatus: 'rejected',
+      // رفض الطلب يُخزَّن في عمود approval_status المسطّح بدل كتابة مستند كامل.
+      // Rejection writes the flat approval_status column instead of a whole document.
+      await supabase.from('portal_users').update({
         approval_status: 'rejected',
-        updatedAt: Date.now()
-      };
-      const { id: _, ...cleanPayload } = updatedUserPayload;
-      await supabase.from('portal_users').update({ data: cleanPayload }).eq('portal_user_id', userId);
+        updated_at: new Date().toISOString(),
+      }).eq('portal_user_id', userId);
       await loadPending();
     } catch (err) {
       console.error("Error rejecting portal user:", err);

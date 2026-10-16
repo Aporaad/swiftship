@@ -1708,3 +1708,62 @@ COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول 
 - **الترحيل الجديد `0037_sync_order_status_id_from_text.sql`**: يعيد تهيئة المعرّف بثلاث مراحل مقيّدة بـ `IS DISTINCT FROM` (مطابقة عربية حرفية، ثم إنجليزية عند غياب مطابقة عربية، ثم `data->>'orderStatusId'` للصفوف بلا نص قبل إسقاط `data`)، وينتهي بحارس `DO $$ ... RAISE EXCEPTION 'order_status_id is inconsistent ...'` يمنع الاختتام عند أي تباعد متبقٍّ.
 - **المحاكاة الحية للتحقق (بدون كتابة)**: نُفِّذ نص 0037 داخل معاملة `BEGIN ... ROLLBACK` على القاعدة الحية: 4 صفوف تم إصلاحها، وفحص الحارس بعد الإصلاح أعطى `STILL DIVERGENT: 0` مع تطابق الصفوف (مثال: `order_status_id = 4` ↔ «وصل مستودع السعودية») ثم تراجعت المعاملة كاملة.
 - **حصيلة الحالة**: الترحيلات المطبَّقة = 0021، 0022، 0024 → 0032. المعلَّقة وتحتاج لوحة Supabase = 0010، 0023، 0036، 0037 (مجمَّعة في `migrations_pending_2026-10-15.sql`)، ثم 0034 آخرًا.
+
+## [2026-10-16 08:06:00 +03:00] — AI Model: Qoder Agent
+### حصر الفجوات المتبقية قبل إسقاط الحمولة وتوسيع 0038 و 0034
+- **جرد الأعمدة الحمولة في القاعدة الحيّة**: 34 عمودًا ما زال موجودًا (`data`, `details`, `replies`, `filters`, `exchange_rates`, `permissions`, `before_data`, `after_data`, `metadata`, `location`, `body_details`, `associated_user_ids`) — أي أن `0034` لم يُنفَّذ، مع بقاء كل الأعمدة الرئيسية البديلة التي أنشأها 0024→0032.
+- **إثبات انتقال القيم**: لكل مفتاح حمولة قورن بعدّ الصفوف التي عمودها المسطّح ما زال `NULL`. الصفوف الوحيدة غير المنقولة هي: `whatsapp_logs.external_response` (12 صفًا)، `orders.customer_account_id` (صف واحد = `1132-0014` مطابق لـ `order_party_account_id`)، ومقاسات `cust_details.body_details` (3 صفوف)، وأعلام مراجعة `items_category.details` (صفّان) — والأخيرة مغطاة فعلًا في القسم 1 من 0038.
+- **فجوات اتّضح أنها آمنة**: `notifications.associatedUserIds` كلها `[]` (188 صفًا بمصفوفة فارغة) فبقاء `notification_recipient` فارغًا صحيح؛ `portal_users.uid` يطابق `auth_uid` حرفيًّا (0 تباعد من 5 صفوف)؛ `commercialRegister` قيمة نصية فارغة؛ `cust_details.acquisitionSource` كائن محتواه (`joinBy`/`referrerId`/`notes`) موجود أصلًا في أعمدتها؛ `salary_history`/`auto_entries` قيم `cur_no`/`currencyId` هي `jsonb null` لا بيانات.
+- **إسقاط آمن مؤكَّد**: `shipments.data` و `report_templates.data` و `report_templates.filters` و `report_settings.exchange_rates` و `customers.location` و `customers.body_details` و `customers.preferred_categories` و `portal_tickets.replies` كلها صفر صفوف متبقية، و`cust_details.data` مفاتيحه المنفردة (`address`) نصوص فارغة.
+- **تحذير تشغيلي مُتحقَّق**: `alx_api_private.safe_jsonb(text)` غير موجودة في القاعدة الآن؛ هي معرَّفة داخل القسم 0 من `0038` نفسه، لذلك يجب تنفيذ 0038 كاملًا من أوله ولا يُقتطع منه قسم.
+- **إضافات `0038_close_flattening_gaps.sql`**: §18 (7 أعمدة مقاسات + تعبئة من `safe_jsonb(body_details)` بـ `payload_number`/`payload_text_array`)، §19 (تعبئة `external_response` من `data->>'externalResponse'`)، §20 (تعبئة `customer_account_id` من الحمولة أو من `order_party_account_id` لنوع العميل) — الملف صار 20 قسمًا ولا يحذف أي عمود.
+- **إضافات `0034_drop_legacy_jsonb_payloads.sql`**: `ALTER TABLE public.cust_details DROP COLUMN IF EXISTS location;` و `... DROP COLUMN IF EXISTS body_details;` بعد أن كانا نصًا يحمل مستند JSON ويكتبه الـ API بـ `JSON.stringify`.
+- **ترتيب التنفيذ المطلوب من المشغّل (لوحة Supabase بحساب `postgres`)**: `0038_close_flattening_gaps.sql` ثم `0034_drop_legacy_jsonb_payloads.sql` فقط، بدون إعادة تشغيل 0024→0032 المطبَّقة.
+
+### محاكاة الأقسام الجديدة قبل التسليم (2026-10-16 08:32 +03:00 — Qoder Agent)
+- نُفِّذت أقسام `0038` التي لا تحتاج DDL (§1 أعلام المراجعة، §19، §20) داخل معاملة `BEGIN … ROLLBACK` على القاعدة الحيّة: §19 عبّأ 12 صفًا، §20 عبّأ الصف `ALX-2610-1005` بـ `customer_account_id = 1132-0014`، §1 ضبط `cat_perfumes` على hazard و`cat_jewelry` على highValue، ثم تراجعت المعاملة كاملة (بعد التراجع: عدد الصفوف المملوءة = 0).
+- تعبيرات §18 فُحصت بمرشّح JSON نصي مؤقت لأن `alx_api_private.safe_jsonb` تُنشأ في القسم 0 من نفس الملف: الصفوف الثلاثة أعادت المقاسات و`heightCm`/`weightKg` و`preferredColors` كاملة.
+- الخلاصة: كل أقسام 0038 التي أمكن اختبارها بلا DDL نجحت، ولم يتبقَّ أي مفتاح حمولة بلا عمود رئيسي قبل تنفيذ `0034`.
+
+## [2026-10-16 08:26 +03:00] — Qoder
+- **نوع العملية**: قراءة فقط (`information_schema` + `pg_proc` + دوال jsonb) — لم يُنفَّذ أي DDL ولم تتغيّر أي بيانات.
+- **تأكيد الترحيلات المعلّقة سابقًا**: 0010 و 0023 أصبحت مطبَّقة — `alx_api_private.notification_outbox` موجود، و `public.asset_maintenance_log` موجود، و 4 من أعمدة `assets` المطلوبة (`category`, `cost`, `purchase_date`, `assigned_courier_id`) موجودة.
+- **حالة 0038**: لم تُطبَّق بعد. الأعمدة التي ينشئها غير موجودة (`cust_details.latitude/street/governorate/address_details/coat_size/preferred_colors`, `portal_users.linked_acc_id/linked_courier_id/linked_source_id`, `orders.package_type`, `settings_general.timezone/auto_notification/cbm_shipping_rate`, `user_settings.sidebar_collapsed/sidebar_items`) ودالة `alx_api_private.safe_jsonb(text)` غير موجودة (§0). دالة `public.validate_order_party` موجودة لكنها النسخة القديمة التي تكتب `NEW.data`.
+- **حالة 0034**: لم تُطبَّق — بقي 29 عمود jsonb في `public` و 5 في `alx_api_private` (الأخيرة مقصودة: دوال مساعدة داخل مخطط خاص).
+- **بيانات نقلت فعلًا**: `notifications.data` فيه 188 صفًا ولا مفتاح واحد (`title`/`message`/`type`) قيمته غائبة عن عموده؛ `orders.data` لا يترك أي مفتاح بلا عمود مطابق؛ `customers` خالية من أي محتوى في `location`/`body_details`/`preferred_categories` (0 من 8).
+- **أهم نقطة**: `cust_details.body_details` و `cust_details.location` عمودا text يحتويان مستندات JSON في 3 صفوف من 7 — هما آخر انتهاك مباشر لقاعدة «لا حقول داخل payload»، وينقلهما 0038 §2 و §18 إلى أعمدة حقيقية قبل أن يُسقطهما 0034.
+- **الجداول الابنة معمَّرة** (مقارنة بالمصدر قبل الإسقاط): `role_permission` 185، `activity_log_detail` 84، `portal_ticket_reply` 2، `settings_general`/`settings_print_template`/`settings_whatsapp` 1 لكل منها، `settings_logistics`/`settings_dashboard` 2، `settings_custom_currency` 3، `settings_report_account` 4، `settings_backup_collection` 6، `expense_category` 13، `order_fired_trigger` 2.
+- **الفجوة الوحيدة**: `orders_history_change` = 0 مقابل `orders_history` = 12 صفًا تحمل لقطات؛ سببها أن 0032 نُفِّذ قبل وجود أي صف سجل. يعالجها 0038 §5، ومن هنا كان الترتيب 0038 ← 0034 إجباريًا.
+- **مفاتيح ثبت بالتكرار أنها آمنة**: `portal_users.uid` (5 صفوف) = `auth_uid` بالضبط، `salary_history.salaryMonth` = `month`، و `createdByUid` يغطّيه §4 في عمود `created_by_uid`، `browser_pages.name` (2) = `name_ar`/`name_en`، `announcements.data->id` (2) و `order_status.data->id` (12) = المفتاح الأساسي، `auto_entries.currencyId` (3) قيمته null، و `cust_details.acquisitionSource` (3) مستند معشّش كل حقوله منقولة إلى `join_by`/`referrer_id`.
+
+## [2026-10-16 23:19:12 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+### تنفيذ وإكمال الترحيلات 0038 و 0034 على قاعدة بيانات Supabase الحيّة
+- **التنفيذ الفعلي**:
+  1. `alx_api_private.customers_read`: أُسقط الـ view وأُعيد بناؤه على الأعمدة المسطحة (`preferred_categories` كـ `text[]`, `latitude`, `longitude`, `address`).
+  2. `public.customers`: أُسقط عمود `location` (jsonb) وعمود `preferred_categories` (jsonb)، وأُعيدت تسمية `preferred_categories_flat` إلى `preferred_categories` (text[])، وجرى دمج بيانات العناوين ومصدر الانضمام من `cust_details`.
+  3. `public.orders`: أنشئت الفهارس `orders_tracking_number_idx`, `orders_customer_id_idx`, `orders_courier_id_flat_idx`.
+  4. `public.settings_general`: أضيفت الأعمدة `timezone` (text), `auto_notification` (boolean), `cbm_shipping_rate` (numeric) ونُقلت قيمها من `settings.data`.
+  5. `public.user_settings`: أضيفت الأعمدة `sidebar_collapsed` (boolean), `sidebar_items` (text[]) ونُقلت قيمها من `user_settings.data`.
+  6. `public.validate_order_party()`: أُعيدت كتابة الدالة لتخزين بيانات أطراف الطلب بالحقول الحقيقية فقط دون كتابة كائن `data`.
+  7. `public.cust_details`: أضيفت الأعمدة `coat_size`, `pants_size`, `shorts_size`, `shoe_size`, `height_cm`, `weight_kg`, `preferred_colors` ونُقلت البيانات من كائن `body_details`.
+  8. `public.whatsapp_logs`: نُقلت `externalResponse` إلى العمود المسطح `external_response`.
+  9. `public.orders_history_write`: عُدّلت الدالة لتمرير `COALESCE(..., 0)` لحقل `account_trans_count` لمنع فشل تحديثات `orders` بموجب قيد NOT NULL.
+  10. `public.orders`: رُحِّل `customerAccountId` إلى `customer_account_id`.
+  11. **تطبيق ترحيل 0034 النهائي**:
+      - إسقاط الفهارس القديمة: `idx_orders_tracking_num`, `idx_orders_customer_uid`, `idx_orders_courier_id`.
+      - إسقاط أعمدة `data` من: `orders`, `notifications`, `activity_logs`, `announcements`, `portal_tickets`, `jobs_req`, `portal_users`, `order_status`, `order_option`, `auto_entries`, `browser_pages`, `user_settings`, `salary_history`, `shipments`, `cust_details`, `whatsapp_logs`, `report_templates`, `settings`.
+      - إسقاط أعمدة jsonb الزائدة: `notifications.associated_user_ids`, `notifications.read`, `activity_logs.details`, `portal_tickets.replies`, `items_category.details`, `roles.permissions`, `report_templates.filters`, `report_settings.exchange_rates`, `orders_history.before_data`, `orders_history.after_data`, `orders_history.metadata`, `settings.category`, `customers.body_details`, `cust_details.location`, `cust_details.body_details`.
+      - إسقاط الدالة المتروكة: `create_smart_json_view(text, text)`.
+- **التحقق النهائي على Supabase**:
+  - `SELECT count(*)::int FROM information_schema.columns WHERE table_schema='public' AND column_name='data'` = **0**
+  - تم توثيق كامل استعلامات SQL المنفذة بالتفصيل في `db_commends.md`.
+
+## [2026-10-16 23:31:47 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+### تسجيل الترحيلات في جدول supabase_migrations.schema_migrations
+- تم إدراج سجلات الترحيلات الرسمية التالية في جدول `supabase_migrations.schema_migrations`:
+  1. `20261016200018` - `settings_and_currency_api_0018`
+  2. `20261016200019` - `employees_extended_fields_0019`
+  3. `20261016200020` - `finance_atomic_rpc_runtime_access_0020`
+  4. `20261016230038` - `close_flattening_gaps_0038`
+  5. `20261016231434` - `drop_legacy_jsonb_payloads_0034`
+- تم التأكد من نجاح الاستعلام وقراءة البيانات والتأكد من تواجد السجلات في قمة الجدول.

@@ -255,6 +255,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, [settings.language]);
 
   /**
+   * جلب الهوية من المسار العام (اسم الشركة وشعارها) — تعمل قبل تسجيل الدخول.
+   * Fetch branding from the public route (company name and logo) — works before login.
+   */
+  const fetchBrand = useCallback(async () => {
+    try {
+      const brand = await settingsCurrenciesApiGateway.getBrand();
+      if (brand && Object.keys(brand).length > 0) {
+        setGlobalSettings(prev => ({ ...prev, ...brand }));
+      }
+    } catch (err) {
+      console.warn('[SettingsContext] fetchBrand failed, keeping current branding:', err);
+    }
+  }, []);
+
+  /**
    * جلب الإعدادات العامة من API
    * Fetch general settings from API
    */
@@ -326,6 +341,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }, 6000);
 
     Promise.allSettled([
+      fetchBrand(),
       fetchGlobalSettings(),
       fetchCurrencies(),
       fetchUserSettings(),

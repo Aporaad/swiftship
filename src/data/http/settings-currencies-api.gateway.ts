@@ -48,6 +48,12 @@ const client = new ApiClient({
 });
 
 export const settingsCurrenciesApiGateway = {
+  async getBrand(): Promise<Record<string, unknown>> {
+    // مسار عام: الهوية (اسم الشركة وشعارها) يجب أن تُعرض قبل تسجيل الدخول.
+    // Public route: branding must render on the login screen before any token exists.
+    const response = await client.get<ApiEnvelope<Record<string, unknown>>>('/api/v1/settings/brand');
+    return response.data ?? {};
+  },
   async getSettings(category: 'general' | 'logistics' | 'whatsapp'): Promise<SettingsApiDto> {
     const response = await client.get<ApiEnvelope<SettingsApiDto>>(`/api/v1/settings/${category}`);
     return response.data;

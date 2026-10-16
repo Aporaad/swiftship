@@ -3028,3 +3028,1846 @@ SELECT count(*) AS total, count(*) FILTER (WHERE is_active) AS active,
 --          currency/orderCurrency/المبالغ وحالة الدفع كلها معادة بالقيم الصحيحة
 ```
 - ملاحظة تنفيذية: لم يُنفَّذ أي `CREATE/ALTER/DROP` — دور `alx_api_runtime` بلا صلاحيات DDL، والموصل المباشر محجوب (`MCP error -32603`)؛ لذلك حُزمت الترحيلات المعلّقة (0010، 0023، 0036، 0037) في `migrations_pending_2026-10-15.sql` لينفّذها المشغّل من لوحة Supabase، ويبقى `0034_drop_legacy_jsonb_payloads.sql` آخرًا بعد نشر الكود المسطّح.
+
+## [2026-10-16 08:06:00 +03:00] — AI Model: Qoder Agent
+### أوامر القاعدة لهذه الجلسة: قراءة فقط (لم يُنفَّذ أي CREATE/ALTER/DROP)
+```sql
+-- 1) حصر كل الأعمدة الشبيهة بالحمولة في مخطط public (قراءة فقط)
+select table_name, column_name, data_type
+  from information_schema.columns
+ where table_schema = 'public'
+   and (data_type in ('jsonb','json')
+        or column_name in ('data','details','replies','filters','exchange_rates',
+                           'before_data','after_data','metadata','location','body_details',
+                           'permissions','associated_user_ids'))
+ order by table_name, column_name;
+-- النتيجة: 34 عمودًا ما زال موجودًا ⇒ 0034 لم يُطبَّق، والأعمدة الرئيسية البديلة موجودة من 0024→0032.
+
+-- 2) إثبات انتقال القيم: لكل مفتاح حمولة، عدّ الصفوف التي عمودها المسطّح ما زال NULL
+select count(*)::int from <table>
+ where <payload> ? '<key>'
+   and nullif(btrim(<payload> ->> '<key>'), '') is not null
+   and <flat_candidates all NULL>;
+-- النتيجة: الفجوات الحقيقية = whatsapp_logs.external_response (12)، orders.customer_account_id (1)،
+--          مقاسات cust_details.body_details (3)، وأعلام items_category (2 مغطاة في 0038 §1).
+
+-- 3) مقارنة أعداد الجداول الابنة بمصادر الحمولة
+select count(*) from public.notification_recipient;   -- 0 (وكل associatedUserIds مصفوفة فارغة ⇒ آمن)
+select count(*) from public.activity_log_detail;      -- 84
+select count(*) from public.portal_ticket_reply;      -- 2 مقابل صفّين بحمولة ردود ⇒ 1:1
+select count(*) from public.role_permission;          -- 185 مقابل 7 أدوار
+select count(*) from public.orders_history_change;    -- 0 (يعيد 0038 §5 توليدها)
+select count(*) from public.expense_category;         -- 13
+select count(*) from public.settings_report_account;  -- 4
+select count(*) from public.order_fired_trigger;      -- 2
+
+-- 4) التحقق من دوال المساعدة قبل تنفيذ 0038
+select p.proname, pg_get_function_arguments(p.oid)
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'alx_api_private';
+-- النتيجة: 17 دالة، و safe_jsonb غير موجودة ⇒ هي معرَّفة داخل القسم 0 من 0038، فيُنفَّذ الملف كاملًا من أوله.
+
+-- 5) فحص أشكال القيم المتبقية قبل كتابة الترحيل
+select cust_detail_id, body_details, location from public.cust_details
+ where nullif(btrim(body_details),'') is not null or nullif(btrim(location),'') is not null;
+-- النتيجة: مستند JSON نصي (coatSize/pantsSize/shortsSize/shoeSize/heightCm/weightKg/preferredColors)
+--          وموقع نصي (lat/lng/city/street/country/governorate/addressDetails) ⇒ يُسطَّح ثم يُسقط.
+```
+
+### DDL مُقترحة جاهزة للتنفيذ من لوحة Supabase (بحساب `postgres`) — لم تُنفَّذ
+```sql
+-- 0038_close_flattening_gaps.sql — §18 (جديد)
+ALTER TABLE public.cust_details
+  ADD COLUMN IF NOT EXISTS coat_size text,
+  ADD COLUMN IF NOT EXISTS pants_size text,
+  ADD COLUMN IF NOT EXISTS shorts_size text,
+  ADD COLUMN IF NOT EXISTS shoe_size text,
+  ADD COLUMN IF NOT EXISTS height_cm numeric,
+  ADD COLUMN IF NOT EXISTS weight_kg numeric,
+  ADD COLUMN IF NOT EXISTS preferred_colors text[];
+UPDATE public.cust_details c
+   SET coat_size = COALESCE(NULLIF(btrim(c.coat_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'coatSize'), '')),
+       pants_size = COALESCE(NULLIF(btrim(c.pants_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'pantsSize'), '')),
+       shorts_size = COALESCE(NULLIF(btrim(c.shorts_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'shortsSize'), '')),
+       shoe_size = COALESCE(NULLIF(btrim(c.shoe_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'shoeSize'), '')),
+       height_cm = COALESCE(c.height_cm, alx_api_private.payload_number(x.body_doc, 'heightCm')),
+       weight_kg = COALESCE(c.weight_kg, alx_api_private.payload_number(x.body_doc, 'weightKg')),
+       preferred_colors = COALESCE(c.preferred_colors, alx_api_private.payload_text_array(x.body_doc, 'preferredColors'))
+  FROM (SELECT d.cust_detail_id, alx_api_private.safe_jsonb(d.body_details) AS body_doc FROM public.cust_details d) x
+ WHERE x.cust_detail_id = c.cust_detail_id AND x.body_doc IS NOT NULL;
+
+-- 0038_close_flattening_gaps.sql — §19 (جديد)
+UPDATE public.whatsapp_logs
+   SET external_response = COALESCE(NULLIF(btrim(external_response, ''), ''),
+                                    NULLIF(btrim(data ->> 'externalResponse', ''), ''))
+ WHERE data IS NOT NULL AND jsonb_typeof(data) = 'object' AND data ? 'externalResponse';
+
+-- 0038_close_flattening_gaps.sql — §20 (جديد)
+UPDATE public.orders
+   SET customer_account_id = COALESCE(NULLIF(btrim(data ->> 'customerAccountId', ''), ''),
+                                      CASE WHEN order_party_type = 'customer'
+                                           THEN NULLIF(btrim(order_party_account_id, ''), '') END)
+ WHERE customer_account_id IS NULL AND data IS NOT NULL AND jsonb_typeof(data) = 'object';
+
+-- 0034_drop_legacy_jsonb_payloads.sql — مضاف في هذه الجلسة
+ALTER TABLE public.cust_details DROP COLUMN IF EXISTS location;
+ALTER TABLE public.cust_details DROP COLUMN IF EXISTS body_details;
+```
+- الترتيب الإلزامي: `0038` كاملًا (20 قسمًا) ثم `0034` — ولا يُعاد تنفيذ 0024→0032 و 0036 و 0037 لأنها مطبَّقة أصلًا.
+
+## [2026-10-16 08:32:00 +03:00] — AI Model: Qoder Agent
+### محاكاة حيّة للأقسام الجديدة (BEGIN … ROLLBACK) — لا شيء ثُبِّت
+```sql
+BEGIN;
+
+-- §19
+UPDATE public.whatsapp_logs
+   SET external_response = COALESCE(NULLIF(btrim(external_response, ''), ''),
+                                    NULLIF(btrim(data ->> 'externalResponse', ''), ''))
+ WHERE data IS NOT NULL AND jsonb_typeof(data) = 'object' AND data ? 'externalResponse'
+ RETURNING whatsapp_log_id;
+-- النتيجة: 12 صفًا تم تعبئته، وبقي external_response مملوءًا في 12 صفًا داخل المعاملة.
+
+-- §20
+UPDATE public.orders
+   SET customer_account_id = COALESCE(NULLIF(btrim(data ->> 'customerAccountId', ''), ''),
+                                      CASE WHEN order_party_type = 'customer'
+                                           THEN NULLIF(btrim(order_party_account_id, ''), '') END)
+ WHERE customer_account_id IS NULL AND data IS NOT NULL AND jsonb_typeof(data) = 'object'
+ RETURNING order_id, customer_account_id;
+-- النتيجة: صف واحد ALX-2610-1005 ⇒ customer_account_id = 1132-0014 (مطابق لحساب الطرف).
+
+-- §1 (أعلام مراجعة الفئات)
+UPDATE public.items_category
+   SET requires_hazard_review = CASE WHEN details->>'hazardReview' IN ('true','false')
+                                     THEN (details->>'hazardReview')::boolean ELSE requires_hazard_review END,
+       requires_high_value_review = CASE WHEN details->>'highValueReview' IN ('true','false')
+                                         THEN (details->>'highValueReview')::boolean ELSE requires_high_value_review END
+ WHERE details IS NOT NULL AND jsonb_typeof(details) = 'object'
+   AND (details ? 'hazardReview' OR details ? 'highValueReview')
+ RETURNING items_category_id, requires_high_value_review, requires_hazard_review;
+-- النتيجة: cat_perfumes ⇒ hazard=true، cat_jewelry ⇒ highValue=true.
+
+-- §18 (تعبيراتها فقط: safe_jsonb تصل مع القسم 0 من 0038، فاستُخدم بدل مؤقت آمن)
+SELECT cust_detail_id, body_doc ->> 'coatSize', body_doc ->> 'pantsSize', body_doc ->> 'shortsSize',
+       body_doc ->> 'shoeSize', alx_api_private.payload_number(body_doc,'heightCm'),
+       alx_api_private.payload_number(body_doc,'weightKg'),
+       alx_api_private.payload_text_array(body_doc,'preferredColors')
+  FROM (SELECT cust_detail_id, CASE WHEN left(btrim(body_details),1) = '{' THEN body_details::jsonb END AS body_doc
+          FROM public.cust_details) x
+ WHERE x.body_doc IS NOT NULL;
+-- النتيجة: 3 صفوف خرجت بالمقاسات والألوان الصحيحة (L / 32 / L / 42 و heightCm 53 و 60 و weightKg 18 و 20).
+
+ROLLBACK;
+-- التحقق بعد التراجع: عدد الصفوف المملوءة في whatsapp_logs.external_response = 0 ⇒ لا تغيير مثبَّت.
+```
+- الصلاحية المرصودة: الموصل `alx_api_runtime` يستطيع `UPDATE` هذه الجداول، لكنه بلا `CREATE/ALTER` — لذلك تُنفَّذ الأقسام التي فيها DDL من لوحة Supabase بحساب `postgres`.
+
+## [2026-10-16 08:26 +03:00] — Qoder
+كل الاستعلامات في هذا القسم للقراءة فقط، نُفِّذت عبر `pg` بموصل `alx_api_runtime` من داخل `alx_api/` بمسبار مؤقت حُذف بعد الجولة. لم تُنشئ أو تُعدّل أي كائن، ولم تُطبع أي اعتمادية.
+
+**1) سجل الترحيلات + آثار 0010/0023 + بقايا jsonb**
+```sql
+select table_schema, table_name from information_schema.tables
+ where table_name ilike '%migration%' order by 1,2;
+-- النتيجة: جداول خرائط ترحيل بيانات فقط (account_id_migration_map, financial_legacy_migration_map,
+--          financial_migration_exceptions, portal_user_migration_map) — لا يوجد جدول ledger للترحيلات
+
+select
+  (select count(*)::int from information_schema.columns where table_schema='public' and table_name='assets'
+     and column_name in ('category','cost','purchase_date','assigned_courier_id')) as extra_cols,
+  (select count(*)::int from information_schema.tables where table_schema='public'
+     and table_name='asset_maintenance_log') as maintenance_table,
+  (select count(*)::int from information_schema.tables where table_schema='alx_api_private'
+     and table_name='notification_outbox') as outbox;
+-- النتيجة: extra_cols=4, maintenance_table=1, outbox=1  ⇒ 0010 و 0023 مطبَّقان
+
+select table_name, column_name, data_type from information_schema.columns
+ where table_schema='public' and data_type in ('jsonb','json') order by 1,2;
+-- النتيجة: 29 عمودًا (orders.data, notifications.data, portal_users.data, portal_tickets.data/replies,
+--          settings.data, roles.permissions, report_templates.data/filters, report_settings.exchange_rates,
+--          orders_history.before_data/after_data/metadata, cust_details.data, items_category.details,
+--          customers.location/body_details/preferred_categories, salary_history.data, user_settings.data,
+--          activity_logs.data, announcements.data, auto_entries.data, browser_pages.data, jobs_req.data,
+--          order_option.data, order_status.data, shipments.data, whatsapp_logs.data)
+```
+
+**2) هل طُبِّقت 0038؟ (أعمدة ودوال لا ينشئها سواها)**
+```sql
+select table_name, column_name from information_schema.columns
+ where table_schema='public' and (
+   (table_name='cust_details' and column_name in ('latitude','longitude','street','governorate','address_details','coat_size','preferred_colors')) or
+   (table_name='portal_users' and column_name in ('linked_acc_id','linked_courier_id','linked_source_id')) or
+   (table_name='orders' and column_name in ('package_type','customer_account_id','order_party_account_id')) or
+   (table_name='whatsapp_logs' and column_name='external_response') or
+   (table_name='settings_general' and column_name in ('timezone','auto_notification','cbm_shipping_rate')) or
+   (table_name='user_settings' and column_name in ('sidebar_collapsed','sidebar_items')))
+ order by 1,2;
+-- النتيجة: 3 صفوف فقط — orders.customer_account_id، orders.order_party_account_id، whatsapp_logs.external_response
+--         ⇒ بقية أعمدة 0038 غير موجودة، أي أن 0038 لم تُطبَّق
+
+select n.nspname as schema, p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+ where p.proname in ('safe_jsonb','validate_order_party') order by 1,2;
+-- النتيجة: public.validate_order_party موجودة (النسخة القديمة التي تكتب NEW.data)
+--          و alx_api_private.safe_jsonb غير موجودة ⇒ §0 لم يُنفَّذ
+
+select table_schema, count(*)::int as cols from information_schema.columns
+ where data_type in ('jsonb','json')
+   and table_schema not in ('information_schema','pg_catalog','graphql','graphql_directives','net','pgmq',
+                            'realtime','storage','supabase_functions','supabase_migrations','vault',
+                            'extensions','pgbouncer')
+ group by 1 order by 1;
+-- النتيجة: public=29، alx_api_private=5 (أعمدة المخطط الخاص مقصودة: دوال وجدول outbox)
+```
+
+**3) هل انتقلت البيانات فعلًا إلى الأعمدة الرئيسية؟**
+```sql
+select count(*)::int as rows_with_data,
+       count(*) filter (where data ? 'title'   and title   is null) as title_only,
+       count(*) filter (where data ? 'message' and message is null) as message_only,
+       count(*) filter (where data ? 'type'    and type    is null) as type_only
+  from public.notifications where data is not null and jsonb_typeof(data)='object';
+-- النتيجة: rows_with_data=188، title_only=0، message_only=0، type_only=0 ⇒ النقل اكتمل
+
+select count(*) filter (where data ? 'subject' and subject is null) as subject_only
+  from public.portal_tickets where data is not null and jsonb_typeof(data)='object';
+-- النتيجة: 0 ⇒ عناوين التذاكر في عمودها الرئيسي
+
+select count(*) filter (where body_details is not null and btrim(body_details) <> ''
+                           and left(btrim(body_details),1)='{') as body_json_rows,
+       count(*) filter (where location     is not null and btrim(location)     <> ''
+                           and left(btrim(location),1)='{')   as loc_json_rows,
+       count(*)::int as total
+  from public.cust_details;
+-- النتيجة: body_json_rows=3، loc_json_rows=3، total=7
+--          ⇒ آخر مستندات JSON داخل أعمدة text؛ ينقلها 0038 §2 (الموقع) و §18 (مقاسات الجسم) قبل أن يُسقطهما 0034
+
+select count(*) filter (where location is not null) as loc,
+       count(*) filter (where body_details is not null) as body,
+       count(*) filter (where preferred_categories is not null) as cats,
+       count(*)::int as total
+  from public.customers;
+-- النتيجة: 0 / 0 / 0 / 8 ⇒ إسقاطها في 0034 بلا أي فقدان
+```
+
+**4) مطابقة كل مفتاح jsonb مع عمود رئيسي (تطبيع الأسماء) — يُنفَّذ ديناميكيًا لكل عمود jsonb في `public`**
+```sql
+with k as (
+    select jsonb_object_keys(<payload_col>) as key from public.<table>
+     where <payload_col> is not null and jsonb_typeof(<payload_col>)='object')
+ select k.key, count(*)::int as rows_with_key
+   from k
+  where not exists (select 1 from information_schema.columns c
+                     where c.table_schema='public' and c.table_name=$1
+                       and (c.column_name = k.key
+                            or replace(lower(c.column_name),'_','') = lower(k.key)))
+  group by k.key order by 2 desc, 1;
+-- النتيجة (المفاتيح التي لا تشابه اسميًا أي عمود):
+--   announcements.data → id(2)                       auto_entries.data → id(10), currencyId(3)
+--   browser_pages.data → name(2)                     cust_details.data → acquisitionSource(3), address(2)
+--   items_category.details → group(18), hazardReview(1), highValueReview(1)
+--   order_option.data → id(7)                        order_status.data → id(12)
+--   portal_users.data → uid(5), linkedAccId(4), commercialRegister(1)
+--   salary_history.data → createdByUid(1), salaryMonth(1)
+--   orders_history.before_data/after_data/metadata → لقطات كاملة الصف (تُستبدل بصفوف orders_history_change)
+--   settings.data → 93 مفتاحًا (وجهتها جداول settings_* المنشأة في 0032، لا أعمدة في جدول settings)
+--   الجداول التي لا مفاتيح بلا هدف: orders.data, notifications.data, shipments.data, jobs_req.data,
+--     user_settings.data, whatsapp_logs.data, activity_logs.data, portal_tickets.data/replies,
+--     roles.permissions, report_templates.data/filters, report_settings.exchange_rates
+```
+
+**5) إثبات أن المفاتيح غير المتطابقة اسميًا مكرَّرة وليست فاقدة**
+```sql
+select data->>'uid' as payload_uid, auth_uid, (data->>'uid' = auth_uid) as equal
+  from public.portal_users where data ? 'uid';
+-- النتيجة: 5 صفوف، equal=true للجميع ⇒ uid مكرر من auth_uid
+
+select left(data->>'commercialRegister',60) as payload_cr, left(commercial_register_url,60) as col_cr,
+       (data->>'commercialRegister' = commercial_register_url) as equal
+  from public.portal_users where data ? 'commercialRegister';
+-- النتيجة: صف واحد فارغ في الطرفين، equal=true
+
+select data->>'salaryMonth' as payload_month, month, (data->>'salaryMonth' = month::text) as equal,
+       data->>'createdByUid' as created_by_uid, user_id, created_by
+  from public.salary_history where data ? 'salaryMonth';
+-- النتيجة: equal=true ('2026-07')؛ createdByUid='b9f57faa-…' بينما user_id و created_by = null
+--          ⇒ §4 في 0038 ينقله إلى عمود created_by_uid جديد (المفتاح الحيّ الوحيد الفاقد فعليًا قبل 0038)
+
+select auto_entry_id, data->>'currencyId' as payload_currency_id, currency, cur_no
+  from public.auto_entries where data ? 'currencyId';
+-- النتيجة: 3 صفوف و currencyId = null في كلها ⇒ لا بيانات تُفقد عند الإسقاط
+
+select browser_page_id, data->>'name' as payload_name, name_ar, name_en
+  from public.browser_pages where data ? 'name';
+-- النتيجة: 2 صفوف، name = name_ar = name_en في الحالتين ⇒ مكرر
+
+select data->>'id' as pid, announcement_id::text as pk, (data->>'id' = announcement_id::text) as equal
+  from public.announcements where data ? 'id';
+-- النتيجة: 2 صفوف، equal=true ⇒ id مكرر من المفتاح الأساسي
+
+select data->>'id' as pid, order_status_id::text as pk, (data->>'id' = order_status_id::text) as equal
+  from public.order_status where data ? 'id';
+-- النتيجة: 12 صفًا، equal=true للجميع
+
+select c.cust_detail_id, c.join_by as col_join_by, c.referrer_id as col_referrer, c.notes as col_notes,
+       c.data -> 'acquisitionSource' ->> 'joinBy'     as src_join_by,
+       c.data -> 'acquisitionSource' ->> 'referrerId' as src_referrer,
+       jsonb_typeof(c.data -> 'acquisitionSource')    as src_type
+  from public.cust_details c where c.data ? 'acquisitionSource';
+-- النتيجة: 3 صفوف، src_type='object'، وكل joinBy/referrerId مطابق لعموده (join_by='facebook'/'friend'
+--          و referrer_id='1b24fa75-…') ⇒ مستند معشّش بلا معلومة جديدة
+```
+
+**6) الجداول الابنة مقابل مصدرها — الحاسم قبل الإسقاط**
+```sql
+select count(*)::int from public.notification_recipient;      -- 0   (ولا إشعار يحمل data->recipients)
+select count(*)::int from public.role_permission;             -- 185 (المصدر: 7 أدوار بمصفوفة permissions)
+select count(*)::int from public.activity_log_detail;         -- 84
+select count(*)::int from public.portal_ticket_reply;         -- 2
+select count(*)::int from public.report_template_filter;      -- 0   (المصدر: 0 قوالب بمرشحات)
+select count(*)::int from public.report_exchange_rate;        -- 0   (المصدر: 0)
+select count(*)::int from public.orders_history_change;       -- 0   ← الفجوة الوحيدة
+                                                             --      (المصدر: 12 صفًا في orders_history بلقطات)
+select count(*)::int from public.settings_general;            -- 1
+select count(*)::int from public.settings_print_template;     -- 1
+select count(*)::int from public.settings_whatsapp;           -- 1
+select count(*)::int from public.settings_logistics;          -- 2
+select count(*)::int from public.settings_dashboard;          -- 2
+select count(*)::int from public.settings_custom_currency;    -- 3
+select count(*)::int from public.settings_backup_collection;  -- 6
+select count(*)::int from public.settings_report_account;     -- 4
+select count(*)::int from public.expense_category;            -- 13
+select count(*)::int from public.order_fired_trigger;         -- 2
+-- الخلاصة: كل جدول ابنة موجود ومعمَّر عدا orders_history_change الذي يملؤه 0038 §5،
+--          لذا يجب تنفيذ 0038 قبل 0034 وإلا ضاع سجل تغيّرات الطلبات.
+```
+
+## [2026-10-16 22:59:01 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §13: إسقاط view alx_api_private.customers_read لإتاحة إسقاط الأعمدة القديمة
+```sql
+DROP VIEW IF EXISTS alx_api_private.customers_read CASCADE;
+```
+
+## [2026-10-16 22:59:11 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §13: إسقاط عمود customers.preferred_categories القديم (jsonb)
+```sql
+ALTER TABLE public.customers DROP COLUMN IF EXISTS preferred_categories;
+```
+
+## [2026-10-16 22:59:16 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §13: إسقاط عمود customers.location القديم (jsonb)
+```sql
+ALTER TABLE public.customers DROP COLUMN IF EXISTS location;
+```
+
+## [2026-10-16 22:59:22 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §13: إعادة تسمية العمود المسطح preferred_categories_flat إلى preferred_categories
+```sql
+ALTER TABLE public.customers RENAME COLUMN preferred_categories_flat TO preferred_categories;
+```
+
+## [2026-10-16 22:59:27 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §13: ترحيل واستكمال بيانات العملاء الحقيقية من cust_details إلى أعمدة customers المسطحة
+```sql
+UPDATE public.customers c
+        SET preferred_categories = COALESCE(c.preferred_categories, NULLIF(d.preferred_categories, '{}'::text[])),
+            latitude             = COALESCE(c.latitude, d.latitude),
+            longitude            = COALESCE(c.longitude, d.longitude),
+            acquisition_source   = COALESCE(NULLIF(btrim(COALESCE(c.acquisition_source, '')), ''),
+                                            NULLIF(btrim(d.join_by), ''), NULLIF(btrim(c.join_by), '')),
+            address              = COALESCE(NULLIF(btrim(COALESCE(c.address, '')), ''),
+                                            NULLIF(btrim(d.address), ''),
+                                            NULLIF(btrim(CONCAT_WS('، ', NULLIF(btrim(d.street), ''), NULLIF(btrim(d.city), ''), NULLIF(btrim(d.governorate), ''))), ''))
+       FROM public.cust_details d
+      WHERE d.customer_id = c.customer_id;
+```
+
+## [2026-10-16 22:59:33 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §13: إعادة بناء view alx_api_private.customers_read على الأعمدة المسطحة ومنح الصلاحية لـ alx_api_runtime
+```sql
+CREATE VIEW alx_api_private.customers_read AS
+     SELECT customer_id,
+            account_id,
+            is_active,
+            join_by,
+            referrer_id,
+            full_name,
+            name_ar,
+            name_en,
+            customer_level,
+            created_at,
+            updated_at,
+            acquisition_source,
+            preferred_categories,
+            latitude,
+            longitude,
+            address,
+            onboarding_completed
+       FROM public.customers;
+
+     GRANT SELECT ON alx_api_private.customers_read TO alx_api_runtime;
+```
+
+## [2026-10-16 23:01:54 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §14: إنشاء فهارس الأعمدة المسطحة لجدول orders
+```sql
+CREATE INDEX IF NOT EXISTS orders_tracking_number_idx ON public.orders (tracking_number);
+     CREATE INDEX IF NOT EXISTS orders_customer_id_idx ON public.orders (customer_id);
+     CREATE INDEX IF NOT EXISTS orders_courier_id_flat_idx ON public.orders (courier_id);
+```
+
+## [2026-10-16 23:01:57 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §15: إضافة أعمدة settings_general (timezone, auto_notification, cbm_shipping_rate) وترحيل البيانات
+```sql
+ALTER TABLE public.settings_general
+       ADD COLUMN IF NOT EXISTS timezone text,
+       ADD COLUMN IF NOT EXISTS auto_notification boolean,
+       ADD COLUMN IF NOT EXISTS cbm_shipping_rate numeric;
+
+     UPDATE public.settings_general g
+        SET timezone = COALESCE(g.timezone, alx_api_private.payload_text(s.data, 'timezone')),
+            auto_notification = COALESCE(g.auto_notification, alx_api_private.payload_boolean(s.data, 'autoNotification')),
+            cbm_shipping_rate = COALESCE(g.cbm_shipping_rate, alx_api_private.payload_number(s.data, 'cbmShippingRate'))
+       FROM public.settings s
+      WHERE s.setting_id = 'general'
+        AND (g.timezone IS NULL OR g.auto_notification IS NULL OR g.cbm_shipping_rate IS NULL);
+```
+
+## [2026-10-16 23:01:59 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §16: إضافة أعمدة user_settings (sidebar_collapsed, sidebar_items) وترحيل البيانات
+```sql
+ALTER TABLE public.user_settings
+       ADD COLUMN IF NOT EXISTS sidebar_collapsed boolean,
+       ADD COLUMN IF NOT EXISTS sidebar_items text[];
+
+     UPDATE public.user_settings
+        SET sidebar_collapsed = COALESCE(sidebar_collapsed, alx_api_private.payload_boolean(data, 'sidebarCollapsed')),
+            sidebar_items = COALESCE(sidebar_items, alx_api_private.payload_text_array(data, 'sidebarItems'))
+      WHERE jsonb_typeof(data) = 'object';
+```
+
+## [2026-10-16 23:02:00 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §17: إعادة كتابة دالة validate_order_party() للتعامل الحصري مع الأعمدة المسطحة دون الكتابة في data
+```sql
+CREATE OR REPLACE FUNCTION public.validate_order_party()
+      RETURNS trigger
+      LANGUAGE plpgsql
+     AS $function$
+     DECLARE
+       party_id text;
+       party_type text;
+       account_value text;
+     BEGIN
+       party_type := COALESCE(NULLIF(NEW.order_party_type, ''), 'customer');
+       party_id := CASE party_type
+                     WHEN 'employee' THEN COALESCE(NULLIF(NEW.order_party_id, ''), NULLIF(NEW.employee_id, ''))
+                     WHEN 'courier'  THEN COALESCE(NULLIF(NEW.order_party_id, ''), NULLIF(NEW.courier_id, ''))
+                     ELSE                 COALESCE(NULLIF(NEW.order_party_id, ''), NULLIF(NEW.customer_id, ''))
+                   END;
+       IF party_id IS NULL THEN
+         RAISE EXCEPTION 'An order party is required.';
+       END IF;
+
+       IF party_type = 'customer' THEN
+         IF NOT EXISTS (SELECT 1 FROM public.customers WHERE customer_id::text = party_id) THEN
+           RAISE EXCEPTION 'Order customer party % does not exist.', party_id;
+         END IF;
+         NEW.customer_id := party_id;
+         NEW.employee_id := NULL;
+         NEW.courier_id := NULL;
+         SELECT account_id INTO account_value FROM public.customers WHERE customer_id::text = party_id;
+       ELSIF party_type = 'employee' THEN
+         IF NOT EXISTS (SELECT 1 FROM public.employees WHERE employee_id::text = party_id) THEN
+           RAISE EXCEPTION 'Order employee party % does not exist.', party_id;
+         END IF;
+         NEW.customer_id := NULL;
+         NEW.employee_id := party_id;
+         NEW.courier_id := NULL;
+         SELECT account_id INTO account_value FROM public.employees WHERE employee_id::text = party_id;
+       ELSIF party_type = 'courier' THEN
+         IF NOT EXISTS (SELECT 1 FROM public.couriers WHERE courier_id::text = party_id) THEN
+           RAISE EXCEPTION 'Order courier party % does not exist.', party_id;
+         END IF;
+         NEW.customer_id := NULL;
+         NEW.employee_id := NULL;
+         NEW.courier_id := party_id;
+         SELECT account_id INTO account_value FROM public.couriers WHERE courier_id::text = party_id;
+       ELSE
+         RAISE EXCEPTION 'Unsupported order party type %.', party_type;
+       END IF;
+
+       IF account_value IS NULL THEN
+         RAISE EXCEPTION 'The % order party % has no linked financial account.', party_type, party_id;
+       END IF;
+
+       NEW.order_party_id := party_id;
+       NEW.order_party_type := party_type;
+       NEW.is_staff_order := party_type <> 'customer';
+       NEW.order_party_account_id := account_value;
+       NEW.customer_account_id := CASE WHEN party_type = 'customer' THEN account_value ELSE NEW.customer_account_id END;
+
+       RETURN NEW;
+     END;
+     $function$;
+
+     COMMENT ON FUNCTION public.validate_order_party() IS
+       'Resolves the order party into first-class columns; writes no jsonb payload.';
+```
+
+## [2026-10-16 23:02:03 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §18: إضافة أعمدة المقاسات وتفاصيل الجسم لجدول cust_details وترحيل البيانات من body_details
+```sql
+ALTER TABLE public.cust_details
+       ADD COLUMN IF NOT EXISTS coat_size text,
+       ADD COLUMN IF NOT EXISTS pants_size text,
+       ADD COLUMN IF NOT EXISTS shorts_size text,
+       ADD COLUMN IF NOT EXISTS shoe_size text,
+       ADD COLUMN IF NOT EXISTS height_cm numeric,
+       ADD COLUMN IF NOT EXISTS weight_kg numeric,
+       ADD COLUMN IF NOT EXISTS preferred_colors text[];
+
+     UPDATE public.cust_details c
+        SET coat_size       = COALESCE(NULLIF(btrim(c.coat_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'coatSize'), '')),
+            pants_size      = COALESCE(NULLIF(btrim(c.pants_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'pantsSize'), '')),
+            shorts_size     = COALESCE(NULLIF(btrim(c.shorts_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'shortsSize'), '')),
+            shoe_size       = COALESCE(NULLIF(btrim(c.shoe_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'shoeSize'), '')),
+            height_cm       = COALESCE(c.height_cm, alx_api_private.payload_number(x.body_doc, 'heightCm')),
+            weight_kg       = COALESCE(c.weight_kg, alx_api_private.payload_number(x.body_doc, 'weightKg')),
+            preferred_colors = COALESCE(c.preferred_colors, alx_api_private.payload_text_array(x.body_doc, 'preferredColors'))
+       FROM (SELECT d.cust_detail_id, alx_api_private.safe_jsonb(d.body_details) AS body_doc
+               FROM public.cust_details d) x
+      WHERE x.cust_detail_id = c.cust_detail_id
+        AND x.body_doc IS NOT NULL;
+```
+
+## [2026-10-16 23:02:05 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §19: ترحيل externalResponse من payload إلى العمود المسطح في whatsapp_logs
+```sql
+UPDATE public.whatsapp_logs
+        SET external_response = COALESCE(NULLIF(btrim(external_response, ''), ''),
+                                         NULLIF(btrim(data ->> 'externalResponse', ''), ''))
+      WHERE data IS NOT NULL AND jsonb_typeof(data) = 'object' AND data ? 'externalResponse';
+```
+
+## [2026-10-16 23:13:31 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: تحديث دالة orders_history_write لتمرير 0 افتراضياً لـ account_trans_count مع الحفاظ على التوقيع الدقيق
+```sql
+CREATE OR REPLACE FUNCTION public.orders_history_write(
+      p_order_id text DEFAULT NULL,
+      p_order_number text DEFAULT NULL,
+      p_shipment_id text DEFAULT NULL,
+      p_journal_entry_id text DEFAULT NULL,
+      p_account_transaction_id text DEFAULT NULL,
+      p_activity_log_id text DEFAULT NULL,
+      p_event_type text DEFAULT 'custom',
+      p_event_category text DEFAULT 'general',
+      p_operation text DEFAULT 'custom',
+      p_entity_type text DEFAULT 'custom',
+      p_source text DEFAULT 'database',
+      p_summary text DEFAULT NULL,
+      p_before_data jsonb DEFAULT '{}'::jsonb,
+      p_after_data jsonb DEFAULT '{}'::jsonb,
+      p_metadata jsonb DEFAULT '{}'::jsonb,
+      p_actor_id text DEFAULT NULL,
+      p_actor_name text DEFAULT NULL,
+      p_actor_role text DEFAULT NULL
+    )
+     RETURNS void
+     LANGUAGE plpgsql
+     SECURITY DEFINER
+     SET search_path TO 'pg_catalog', 'public'
+    AS $function$
+    DECLARE
+      actor_record record;
+      v_history_id text;
+      v_before jsonb := COALESCE(p_before_data, '{}'::jsonb);
+      v_after jsonb := COALESCE(p_after_data, '{}'::jsonb);
+      v_meta jsonb := COALESCE(p_metadata, '{}'::jsonb);
+    BEGIN
+      SELECT * INTO actor_record FROM public.orders_history_actor(p_actor_id, p_actor_name, p_actor_role);
+      v_history_id := 'oh_' || substr(md5(random()::text || clock_timestamp()::text || txid_current()::text), 1, 24);
+
+      INSERT INTO public.orders_history (
+        orders_history_id, order_id, order_number, shipment_id, main_entry_id, account_trans_id, activity_log_id,
+        event_type, event_category, operation, entity_type, actor_id, actor_name, actor_role, source, summary,
+        trigger_name, changed_fields, deleted_order_id, order_reference, activity_target, activity_action, activity_details,
+        automation_key, auto_rule_id, status_id, is_automatic, account_trans_count, occurred_at, created_at
+      ) VALUES (
+        v_history_id, p_order_id, p_order_number, p_shipment_id, p_journal_entry_id, p_account_transaction_id, p_activity_log_id,
+        p_event_type, p_event_category, p_operation, p_entity_type,
+        actor_record.actor_id, actor_record.actor_name, actor_record.actor_role, COALESCE(p_source, 'database'), p_summary,
+        NULLIF(btrim(COALESCE(v_meta->>'trigger', '')), ''),
+        (SELECT array_agg(btrim(y.value) ORDER BY y.ordinality)
+           FROM jsonb_array_elements_text(COALESCE(v_meta->'changedFields', '[]'::jsonb)) WITH ORDINALITY y(value, ordinality)
+          WHERE jsonb_typeof(v_meta->'changedFields') = 'array'),
+        NULLIF(btrim(COALESCE(v_meta->>'deletedOrderId', '')), ''),
+        NULLIF(btrim(COALESCE(v_meta->>'orderReference', '')), ''),
+        NULLIF(btrim(COALESCE(v_meta->>'activityTarget', '')), ''),
+        NULLIF(btrim(COALESCE(v_meta->>'activityAction', '')), ''),
+        NULLIF(btrim(COALESCE(v_meta->>'activityDetails', '')), ''),
+        NULLIF(btrim(COALESCE(v_meta->>'automationKey', '')), ''),
+        NULLIF(btrim(COALESCE(v_meta->>'autoRuleId', '')), ''),
+        NULLIF(btrim(COALESCE(v_meta->>'statusId', '')), ''),
+        CASE WHEN v_meta->>'isAutomatic' IN ('true','false') THEN (v_meta->>'isAutomatic')::boolean END,
+        COALESCE(alx_api_private.cast_integer(v_meta->>'accountTransCount'), 0),
+        now(), now()
+      );
+
+      WITH diffs AS (
+        SELECT COALESCE(b.key, a.key) AS field_name, b.value #>> '{}' AS old_value, a.value #>> '{}' AS new_value
+          FROM jsonb_each(CASE WHEN jsonb_typeof(v_before) = 'object' THEN v_before ELSE '{}'::jsonb END) b
+          FULL OUTER JOIN jsonb_each(CASE WHEN jsonb_typeof(v_after) = 'object' THEN v_after ELSE '{}'::jsonb END) a
+            ON b.key = a.key
+         WHERE COALESCE(b.key, a.key) <> 'data' AND b.value IS DISTINCT FROM a.value
+        UNION ALL
+        SELECT 'data.' || COALESCE(b.key, a.key), b.value #>> '{}', a.value #>> '{}'
+          FROM jsonb_each(CASE WHEN jsonb_typeof(v_before->'data') = 'object' THEN v_before->'data' ELSE '{}'::jsonb END) b
+          FULL OUTER JOIN jsonb_each(CASE WHEN jsonb_typeof(v_after->'data') = 'object' THEN v_after->'data' ELSE '{}'::jsonb END) a
+            ON b.key = a.key
+         WHERE b.value IS DISTINCT FROM a.value
+      )
+      INSERT INTO public.orders_history_change (orders_history_id, field_name, old_value, new_value)
+      SELECT v_history_id, d.field_name, d.old_value, d.new_value FROM diffs d
+      ON CONFLICT (orders_history_id, field_name) DO UPDATE
+        SET old_value = EXCLUDED.old_value, new_value = EXCLUDED.new_value;
+    END;
+    $function$;
+```
+
+## [2026-10-16 23:13:33 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0038 §20: ترحيل customerAccountId من payload إلى العمود المسطح في orders
+```sql
+UPDATE public.orders
+        SET customer_account_id = COALESCE(NULLIF(btrim(data ->> 'customerAccountId', ''), ''),
+                                           CASE WHEN order_party_type = 'customer'
+                                                THEN NULLIF(btrim(order_party_account_id, ''), '') END)
+      WHERE customer_account_id IS NULL
+        AND data IS NOT NULL AND jsonb_typeof(data) = 'object';
+```
+
+## [2026-10-16 23:14:12 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0034: إسقاط الفهارس القديمة المعتمدة على orders.data
+```sql
+DROP INDEX IF EXISTS public.idx_orders_tracking_num;
+     DROP INDEX IF EXISTS public.idx_orders_customer_uid;
+     DROP INDEX IF EXISTS public.idx_orders_courier_id;
+```
+
+## [2026-10-16 23:14:13 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0034: إسقاط أعمدة data من جداول العمليات (orders, shipments, cust_details, whatsapp_logs)
+```sql
+ALTER TABLE public.orders DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.shipments DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.cust_details DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.whatsapp_logs DROP COLUMN IF EXISTS data;
+```
+
+## [2026-10-16 23:14:15 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0034: إسقاط أعمدة data و jsonb القديمة من (notifications, activity_logs, announcements)
+```sql
+ALTER TABLE public.notifications DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.notifications DROP COLUMN IF EXISTS associated_user_ids;
+     ALTER TABLE public.notifications DROP COLUMN IF EXISTS read;
+     ALTER TABLE public.activity_logs DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.activity_logs DROP COLUMN IF EXISTS details;
+     ALTER TABLE public.announcements DROP COLUMN IF EXISTS data;
+```
+
+## [2026-10-16 23:14:16 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0034: إسقاط أعمدة data و jsonb القديمة من جداول البوابة (portal_tickets, jobs_req, portal_users)
+```sql
+ALTER TABLE public.portal_tickets DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.portal_tickets DROP COLUMN IF EXISTS replies;
+     ALTER TABLE public.jobs_req DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.portal_users DROP COLUMN IF EXISTS data;
+```
+
+## [2026-10-16 23:14:17 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0034: إسقاط أعمدة data و jsonb القديمة من جداول الإعدادات والخيارات والأدوار
+```sql
+ALTER TABLE public.order_status DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.order_option DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.auto_entries DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.browser_pages DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.user_settings DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.salary_history DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.items_category DROP COLUMN IF EXISTS details;
+     ALTER TABLE public.roles DROP COLUMN IF EXISTS permissions;
+```
+
+## [2026-10-16 23:14:18 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: 0034: إسقاط باقي أعمدة jsonb والإعدادات المتبقية (reports, orders_history, settings, cust_details)
+```sql
+ALTER TABLE public.report_templates DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.report_templates DROP COLUMN IF EXISTS filters;
+     ALTER TABLE public.report_settings DROP COLUMN IF EXISTS exchange_rates;
+     ALTER TABLE public.orders_history DROP COLUMN IF EXISTS before_data;
+     ALTER TABLE public.orders_history DROP COLUMN IF EXISTS after_data;
+     ALTER TABLE public.orders_history DROP COLUMN IF EXISTS metadata;
+     ALTER TABLE public.settings DROP COLUMN IF EXISTS data;
+     ALTER TABLE public.settings DROP COLUMN IF EXISTS category;
+     ALTER TABLE public.customers DROP COLUMN IF EXISTS body_details;
+     DROP FUNCTION IF EXISTS public.create_smart_json_view(text, text);
+     ALTER TABLE public.cust_details DROP COLUMN IF EXISTS location;
+     ALTER TABLE public.cust_details DROP COLUMN IF EXISTS body_details;
+```
+
+## [2026-10-16 23:31:08 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: تسجيل الترحيل settings_and_currency_api_0018 في جدول supabase_migrations.schema_migrations
+```sql
+INSERT INTO supabase_migrations.schema_migrations (version, name, statements, created_by)
+      VALUES (
+        '20261016200018',
+        'settings_and_currency_api_0018',
+        ARRAY[$SQL$-- API access for existing shared system settings, currencies, rates, and user UI preferences.
+-- This migration intentionally does NOT create or move any table.
+
+REVOKE ALL ON TABLE public.settings, public.currency, public.cur_price, public.user_settings
+  FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.settings, public.currency, public.cur_price, public.user_settings
+  TO alx_api_runtime;
+
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.currency ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cur_price ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.currency FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.cur_price FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS api_runtime_settings_all ON public.settings;
+DROP POLICY IF EXISTS api_runtime_currency_all ON public.currency;
+DROP POLICY IF EXISTS api_runtime_cur_price_all ON public.cur_price;
+DROP POLICY IF EXISTS api_runtime_user_settings_all ON public.user_settings;
+DROP POLICY IF EXISTS "Allow all" ON public.user_settings;
+
+CREATE POLICY api_runtime_settings_all ON public.settings
+  FOR ALL TO alx_api_runtime USING (true) WITH CHECK (true);
+CREATE POLICY api_runtime_currency_all ON public.currency
+  FOR ALL TO alx_api_runtime USING (true) WITH CHECK (true);
+CREATE POLICY api_runtime_cur_price_all ON public.cur_price
+  FOR ALL TO alx_api_runtime USING (true) WITH CHECK (true);
+CREATE POLICY api_runtime_user_settings_all ON public.user_settings
+  FOR ALL TO alx_api_runtime USING (true) WITH CHECK (true);
+
+INSERT INTO alx_api_private.permissions (code, resource, action, description) VALUES
+  ('view_general_settings', 'general_settings', 'view', 'Read shared system settings through the API'),
+  ('edit_general_settings', 'general_settings', 'edit', 'Edit shared system settings through the API'),
+  ('view_interface_settings', 'interface_settings', 'view', 'Read the authenticated user UI settings through the API'),
+  ('edit_interface_settings', 'interface_settings', 'edit', 'Edit the authenticated user UI settings through the API'),
+  ('view_exchange_rates', 'exchange_rates', 'view', 'Read shared currencies and exchange rates through the API'),
+  ('add_currencies', 'currencies', 'create', 'Create shared currencies through the API'),
+  ('edit_currencies', 'currencies', 'edit', 'Edit shared currencies through the API'),
+  ('delete_currencies', 'currencies', 'delete', 'Disable shared currencies through the API'),
+  ('edit_exchange_rates', 'exchange_rates', 'edit', 'Add shared exchange rates through the API')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO alx_api_private.role_permissions (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM alx_api_private.roles r CROSS JOIN alx_api_private.permissions p
+WHERE r.code = 'admin'
+  AND p.code IN (
+    'view_general_settings', 'edit_general_settings', 'view_interface_settings', 'edit_interface_settings',
+    'view_exchange_rates', 'add_currencies', 'edit_currencies', 'delete_currencies', 'edit_exchange_rates'
+  )
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+$SQL$]::text[],
+        'arslan.alshamari@gmail.com'
+      )
+      ON CONFLICT (version) DO UPDATE
+        SET name = EXCLUDED.name,
+            statements = EXCLUDED.statements,
+            created_by = EXCLUDED.created_by;
+```
+
+## [2026-10-16 23:31:09 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: تسجيل الترحيل employees_extended_fields_0019 في جدول supabase_migrations.schema_migrations
+```sql
+INSERT INTO supabase_migrations.schema_migrations (version, name, statements, created_by)
+      VALUES (
+        '20261016200019',
+        'employees_extended_fields_0019',
+        ARRAY[$SQL$-- Migration 0019: Add missing fields to public.employees
+-- (phone, email, disabled, address, gps_location, notes)
+
+ALTER TABLE public.employees
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS disabled boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS address text,
+  ADD COLUMN IF NOT EXISTS gps_location text,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+COMMENT ON COLUMN public.employees.phone IS 'رقم هاتف الموظف';
+COMMENT ON COLUMN public.employees.email IS 'البريد الإلكتروني للموظف';
+COMMENT ON COLUMN public.employees.disabled IS 'هل الموظف معطل عن العمل';
+COMMENT ON COLUMN public.employees.address IS 'عنوان الموظف السكني أو الميداني';
+COMMENT ON COLUMN public.employees.gps_location IS 'إحداثيات موقع الموظف GPS';
+COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول الموظف';
+$SQL$]::text[],
+        'arslan.alshamari@gmail.com'
+      )
+      ON CONFLICT (version) DO UPDATE
+        SET name = EXCLUDED.name,
+            statements = EXCLUDED.statements,
+            created_by = EXCLUDED.created_by;
+```
+
+## [2026-10-16 23:31:10 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: تسجيل الترحيل finance_atomic_rpc_runtime_access_0020 في جدول supabase_migrations.schema_migrations
+```sql
+INSERT INTO supabase_migrations.schema_migrations (version, name, statements, created_by)
+      VALUES (
+        '20261016200020',
+        'finance_atomic_rpc_runtime_access_0020',
+        ARRAY[$SQL$-- Finance API step 9: allow the API runtime role to invoke the atomic financial RPCs
+-- used by the new entry/custody/payment/unpost endpoints. Permission checks moved from
+-- the legacy secure_* wrappers (auth.uid() based) to alx_api requirePermission middleware.
+
+GRANT EXECUTE ON FUNCTION
+  public.create_financial_entry_v2(jsonb),
+  public.post_financial_entry(text, text),
+  public.reverse_financial_entry(text, jsonb),
+  public.void_financial_entry_draft(text, text),
+  public.delete_financial_entry_draft(text),
+  public.replace_financial_entry_draft(text, jsonb),
+  public.create_custody_advance(jsonb, jsonb),
+  public.settle_custody_advance(text, jsonb, text),
+  public.record_order_payment_v2(text, numeric, jsonb, text),
+  public.unpost_financial_entry(text, text)
+TO alx_api_runtime;
+$SQL$]::text[],
+        'arslan.alshamari@gmail.com'
+      )
+      ON CONFLICT (version) DO UPDATE
+        SET name = EXCLUDED.name,
+            statements = EXCLUDED.statements,
+            created_by = EXCLUDED.created_by;
+```
+
+## [2026-10-16 23:31:11 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: تسجيل الترحيل close_flattening_gaps_0038 في جدول supabase_migrations.schema_migrations
+```sql
+INSERT INTO supabase_migrations.schema_migrations (version, name, statements, created_by)
+      VALUES (
+        '20261016230038',
+        'close_flattening_gaps_0038',
+        ARRAY[$SQL$-- 0038_close_flattening_gaps.sql
+-- يُغلق فجوات اكتشفها التدقيق وتجب معالجتها قبل إسقاط آخر أعمدة jsonb في 0034.
+-- Closes audit-found gaps that must be fixed before the final jsonb drop (0034).
+--
+-- 1) حقول لم يكن لها عمود رئيسي أصلاً: مجموعة الفئة، موقع العميل، حساب البوابة الرابط، منشئ الراتب.
+--    Fields with no first-class column at all: category group, customer location, portal account link, salary creator.
+-- 2) دوال قاعدة البيانات التي تقرأ/تكتب أعمدة jsonb: كتابة سجل الطلبات، محفّظات القيد والنشاط واليومية، سند قبض الطلب.
+--    Database functions reading/writing jsonb columns: history writer, main-entry/activity/journal audit triggers, order receipt.
+-- 3) إعادة توليد orders_history_change: الترحيل 0032 نُفّذ وصفّ سجل الطلبات كان فارغًا، فبقي جدول التغييرات بلا صفوف.
+--    Regenerates orders_history_change: 0032 ran while orders_history was still empty, so the child table got nothing.
+--
+-- ترتيب التنفيذ: بعد 0032 وقبل 0034 — لا يحذف هذا الملف أي عمود.
+-- Ordering: after 0032 and before 0034 — this migration drops nothing.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 0. تحويل نص إلى jsonb بلا فشل — tolerant text→jsonb cast (cust_details.location stores JSON as text).
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION alx_api_private.safe_jsonb(p_value text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+BEGIN
+  IF p_value IS NULL OR btrim(p_value) = '' THEN
+    RETURN NULL;
+  END IF;
+  RETURN p_value::jsonb;
+EXCEPTION
+  WHEN others THEN
+    RETURN NULL;
+END;
+$function$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 1. فئات الأصناف: مجموعة الفئة وأعلام المراجعة كانت داخل items_category.details.
+--    Item categories: the group label and the review flags lived inside details jsonb.
+--    العمود group_name أُنشئ في 0029 لكن بقيت أعلام المراجعة بلا قيم، فالتعبئة تُعاد بأمان.
+--    group_name came from 0029; the review flags never got their values, so the fill is repeated safely.
+-- ─────────────────────────────────────────────────────────────────────────────
+UPDATE public.items_category
+   SET group_name = COALESCE(NULLIF(group_name, ''), NULLIF(btrim(details->>'group'), ''))
+ WHERE details IS NOT NULL AND jsonb_typeof(details) = 'object';
+
+-- المفتاحان hazardReview/highValueReview لم يُنقلا إلى أعمدتهما الحقيقية سابقًا.
+-- hazardReview/highValueReview were never copied into their first-class columns.
+UPDATE public.items_category
+   SET requires_hazard_review = CASE WHEN details->>'hazardReview' IN ('true','false')
+                                     THEN (details->>'hazardReview')::boolean ELSE requires_hazard_review END,
+       requires_high_value_review = CASE WHEN details->>'highValueReview' IN ('true','false')
+                                         THEN (details->>'highValueReview')::boolean ELSE requires_high_value_review END
+ WHERE details IS NOT NULL AND jsonb_typeof(details) = 'object'
+   AND (details ? 'hazardReview' OR details ? 'highValueReview');
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 2. تفاصيل العميل: كائن الموقع والـ address يصيران أعمدة حقيقية.
+--    Customer details: the location document and the address key become columns.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.cust_details
+  ADD COLUMN IF NOT EXISTS latitude numeric,
+  ADD COLUMN IF NOT EXISTS longitude numeric,
+  ADD COLUMN IF NOT EXISTS street text,
+  ADD COLUMN IF NOT EXISTS governorate text,
+  ADD COLUMN IF NOT EXISTS address_details text,
+  ADD COLUMN IF NOT EXISTS address text;
+
+DO $$
+DECLARE
+  rec record;
+BEGIN
+  FOR rec IN
+    SELECT d.cust_detail_id, alx_api_private.safe_jsonb(d.location) AS loc
+      FROM public.cust_details d
+     WHERE alx_api_private.safe_jsonb(d.location) IS NOT NULL
+  LOOP
+    UPDATE public.cust_details
+       SET latitude        = COALESCE(latitude,
+            CASE WHEN rec.loc->>'lat' ~ '^-?[0-9]+([.][0-9]+)?$' THEN (rec.loc->>'lat')::numeric END),
+           longitude       = COALESCE(longitude,
+            CASE WHEN rec.loc->>'lng' ~ '^-?[0-9]+([.][0-9]+)?$' THEN (rec.loc->>'lng')::numeric END),
+           street          = COALESCE(NULLIF(street, ''), NULLIF(btrim(COALESCE(rec.loc->>'street', '')), '')),
+           governorate     = COALESCE(NULLIF(governorate, ''), NULLIF(btrim(COALESCE(rec.loc->>'governorate', '')), '')),
+           address_details = COALESCE(NULLIF(address_details, ''), NULLIF(btrim(COALESCE(rec.loc->>'addressDetails', '')), '')),
+           city            = COALESCE(NULLIF(city, ''), NULLIF(btrim(COALESCE(rec.loc->>'city', '')), '')),
+           country         = COALESCE(NULLIF(country, ''), NULLIF(btrim(COALESCE(rec.loc->>'country', '')), ''))
+     WHERE cust_detail_id = rec.cust_detail_id;
+  END LOOP;
+
+  UPDATE public.cust_details
+     SET address = COALESCE(NULLIF(address, ''), NULLIF(btrim(COALESCE(data->>'address', '')), ''))
+   WHERE data IS NOT NULL AND jsonb_typeof(data) = 'object' AND data ? 'address';
+END
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 3. مستخدمو البوابة: الحساب المالي الرابط وروابط الموظف والمصدر أعمدة حقيقية.
+--    Portal users: linked financial account, courier and source links become columns.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.portal_users
+  ADD COLUMN IF NOT EXISTS linked_acc_id text,
+  ADD COLUMN IF NOT EXISTS linked_courier_id text,
+  ADD COLUMN IF NOT EXISTS linked_source_id text;
+
+UPDATE public.portal_users
+   SET linked_acc_id     = COALESCE(NULLIF(linked_acc_id, ''),     NULLIF(data->>'linkedAccId', '')),
+       linked_courier_id = COALESCE(NULLIF(linked_courier_id, ''), NULLIF(data->>'linkedCourierId', '')),
+       linked_source_id  = COALESCE(NULLIF(linked_source_id, ''),  NULLIF(data->>'linkedSourceId', ''))
+ WHERE data IS NOT NULL AND jsonb_typeof(data) = 'object';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 3b. الطلب: نوع الطرد كان يُقرأ من الحمولة فقط ولا يُخزَّن في عمود.
+--     Orders: the package type was only ever read from the payload, never stored in a column.
+--     بوابة العملاء ترشّح طلبات المصنع بهذا النوع، فبدون العمود ترجع القائمة فارغة دائمًا.
+--     The customer portal filters factory-CBM orders by it, so the list was always empty.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS package_type text;
+
+UPDATE public.orders
+   SET package_type = COALESCE(NULLIF(package_type, ''), NULLIF(btrim(data->>'packageType'), ''), NULLIF(btrim(data->>'package_type'), ''))
+ WHERE data IS NOT NULL AND jsonb_typeof(data) = 'object';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 4. سجل الرواتب: معرّف المنشئ كان داخل data فقط.
+--    Salary history: the creator uid existed only inside the payload.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.salary_history ADD COLUMN IF NOT EXISTS created_by_uid text;
+
+UPDATE public.salary_history
+   SET created_by_uid = COALESCE(NULLIF(created_by_uid, ''), NULLIF(data->>'createdByUid', ''), NULLIF(created_by, ''))
+ WHERE created_by_uid IS NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5. سجل الطلبات: عمود مفقود كان يتجاهله كاتِب السجل + إعادة توليد صفوف التغيير.
+--    Order history: the writer silently dropped p_account_transaction_id, so the column is added,
+--    and the change rows are regenerated (0032 ran before any history row existed).
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.orders_history
+  ADD COLUMN IF NOT EXISTS account_trans_id text,
+  ADD COLUMN IF NOT EXISTS automation_key text,
+  ADD COLUMN IF NOT EXISTS auto_rule_id text,
+  ADD COLUMN IF NOT EXISTS status_id text,
+  ADD COLUMN IF NOT EXISTS is_automatic boolean;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'orders_history'
+       AND column_name = 'after_data' AND data_type = 'jsonb'
+  ) THEN
+    RETURN;
+  END IF;
+
+  -- تغييرات المستوى الأعلى — top-level field diffs.
+  INSERT INTO public.orders_history_change (orders_history_id, field_name, old_value, new_value)
+  SELECT h.orders_history_id, x.key,
+         COALESCE(h.before_data #>> ARRAY[x.key], h.before_data->'data' #>> ARRAY[x.key]),
+         COALESCE(h.after_data  #>> ARRAY[x.key], h.after_data->'data'  #>> ARRAY[x.key])
+    FROM public.orders_history h,
+         jsonb_object_keys(COALESCE(h.after_data, h.before_data, '{}'::jsonb)) x(key)
+   WHERE jsonb_typeof(COALESCE(h.after_data, h.before_data, '{}'::jsonb)) = 'object'
+     AND x.key NOT IN ('data')
+  ON CONFLICT (orders_history_id, field_name) DO UPDATE
+    SET old_value = EXCLUDED.old_value, new_value = EXCLUDED.new_value;
+
+  -- المفاتيح المتداخلة داخل data القديم تحفظ مسارًا منقوطًا — nested legacy "data" keys keep a dotted path.
+  INSERT INTO public.orders_history_change (orders_history_id, field_name, old_value, new_value)
+  SELECT h.orders_history_id, 'data.' || x.key,
+         h.before_data->'data' #>> ARRAY[x.key],
+         h.after_data->'data'  #>> ARRAY[x.key]
+    FROM public.orders_history h,
+         jsonb_object_keys(COALESCE(h.after_data->'data', h.before_data->'data', '{}'::jsonb)) x(key)
+   WHERE jsonb_typeof(COALESCE(h.after_data->'data', h.before_data->'data')) = 'object'
+   ON CONFLICT (orders_history_id, field_name) DO UPDATE
+     SET old_value = EXCLUDED.old_value, new_value = EXCLUDED.new_value;
+
+  -- metadata.changes كان خريطة jsonb — the legacy changes map also becomes change rows.
+  INSERT INTO public.orders_history_change (orders_history_id, field_name, old_value, new_value)
+  SELECT h.orders_history_id, c.key, c.value->'before' #>> '{}', c.value->'after' #>> '{}'
+    FROM public.orders_history h,
+         jsonb_each(h.metadata->'changes') c(key, value)
+   WHERE jsonb_typeof(h.metadata->'changes') = 'object'
+   ON CONFLICT (orders_history_id, field_name) DO NOTHING;
+
+  -- بقية مفاتيح metadata إلى أعمدة حقيقية — remaining metadata keys into first-class columns.
+  UPDATE public.orders_history
+     SET automation_key = COALESCE(NULLIF(automation_key, ''), NULLIF(metadata->>'automationKey', '')),
+         auto_rule_id   = COALESCE(NULLIF(auto_rule_id, ''),   NULLIF(metadata->>'autoRuleId', '')),
+         status_id      = COALESCE(NULLIF(status_id, ''),      NULLIF(metadata->>'statusId', '')),
+         is_automatic   = COALESCE(is_automatic,
+                            CASE WHEN metadata->>'isAutomatic' IN ('true','false') THEN (metadata->>'isAutomatic')::boolean END),
+         trigger_name   = COALESCE(NULLIF(trigger_name, ''),  NULLIF(metadata->>'trigger', ''))
+   WHERE metadata IS NOT NULL AND jsonb_typeof(metadata) = 'object';
+END
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 6. كاتِب سجل الطلبات: لم يعد يلمس before_data/after_data/metadata.
+--    The history writer no longer touches the legacy jsonb columns.
+--    التوقيع كما هو: المحفّظات تمرّر لقطات محسوبة داخل الذاكرة، وتُكتب الآن كصفوف تغيير.
+--    Signature unchanged: triggers pass in-memory row snapshots, now persisted as change rows.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.orders_history_write(
+  p_order_id text DEFAULT NULL,
+  p_order_number text DEFAULT NULL,
+  p_shipment_id text DEFAULT NULL,
+  p_journal_entry_id text DEFAULT NULL,
+  p_account_transaction_id text DEFAULT NULL,
+  p_activity_log_id text DEFAULT NULL,
+  p_event_type text DEFAULT 'custom',
+  p_event_category text DEFAULT 'general',
+  p_operation text DEFAULT 'custom',
+  p_entity_type text DEFAULT 'custom',
+  p_source text DEFAULT 'database',
+  p_summary text DEFAULT NULL,
+  p_before_data jsonb DEFAULT '{}'::jsonb,
+  p_after_data jsonb DEFAULT '{}'::jsonb,
+  p_metadata jsonb DEFAULT '{}'::jsonb,
+  p_actor_id text DEFAULT NULL,
+  p_actor_name text DEFAULT NULL,
+  p_actor_role text DEFAULT NULL
+)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+  actor_record record;
+  v_history_id text;
+  v_before jsonb := COALESCE(p_before_data, '{}'::jsonb);
+  v_after jsonb := COALESCE(p_after_data, '{}'::jsonb);
+  v_meta jsonb := COALESCE(p_metadata, '{}'::jsonb);
+BEGIN
+  SELECT * INTO actor_record FROM public.orders_history_actor(p_actor_id, p_actor_name, p_actor_role);
+  v_history_id := 'oh_' || substr(md5(random()::text || clock_timestamp()::text || txid_current()::text), 1, 24);
+
+  INSERT INTO public.orders_history (
+    orders_history_id, order_id, order_number, shipment_id, main_entry_id, account_trans_id, activity_log_id,
+    event_type, event_category, operation, entity_type, actor_id, actor_name, actor_role, source, summary,
+    trigger_name, changed_fields, deleted_order_id, order_reference, activity_target, activity_action, activity_details,
+    automation_key, auto_rule_id, status_id, is_automatic, account_trans_count, occurred_at, created_at
+  ) VALUES (
+    v_history_id, p_order_id, p_order_number, p_shipment_id, p_journal_entry_id, p_account_transaction_id, p_activity_log_id,
+    p_event_type, p_event_category, p_operation, p_entity_type,
+    actor_record.actor_id, actor_record.actor_name, actor_record.actor_role, COALESCE(p_source, 'database'), p_summary,
+    NULLIF(btrim(COALESCE(v_meta->>'trigger', '')), ''),
+    (SELECT array_agg(btrim(y.value) ORDER BY y.ordinality)
+       FROM jsonb_array_elements_text(COALESCE(v_meta->'changedFields', '[]'::jsonb)) WITH ORDINALITY y(value, ordinality)
+      WHERE jsonb_typeof(v_meta->'changedFields') = 'array'),
+    NULLIF(btrim(COALESCE(v_meta->>'deletedOrderId', '')), ''),
+    NULLIF(btrim(COALESCE(v_meta->>'orderReference', '')), ''),
+    NULLIF(btrim(COALESCE(v_meta->>'activityTarget', '')), ''),
+    NULLIF(btrim(COALESCE(v_meta->>'activityAction', '')), ''),
+    NULLIF(btrim(COALESCE(v_meta->>'activityDetails', '')), ''),
+    NULLIF(btrim(COALESCE(v_meta->>'automationKey', '')), ''),
+    NULLIF(btrim(COALESCE(v_meta->>'autoRuleId', '')), ''),
+    NULLIF(btrim(COALESCE(v_meta->>'statusId', '')), ''),
+    CASE WHEN v_meta->>'isAutomatic' IN ('true','false') THEN (v_meta->>'isAutomatic')::boolean END,
+    COALESCE(alx_api_private.cast_integer(v_meta->>'accountTransCount'), 0),
+    now(), now()
+  );
+
+  -- اللقطة صارت صفوف تغيير: مستوًى أعلى + المفاتيح المتداخلة داخل data القديم.
+  -- The snapshot is now change rows: top level plus nested legacy "data" keys.
+  WITH diffs AS (
+    SELECT COALESCE(b.key, a.key) AS field_name, b.value #>> '{}' AS old_value, a.value #>> '{}' AS new_value
+      FROM jsonb_each(CASE WHEN jsonb_typeof(v_before) = 'object' THEN v_before ELSE '{}'::jsonb END) b
+      FULL OUTER JOIN jsonb_each(CASE WHEN jsonb_typeof(v_after) = 'object' THEN v_after ELSE '{}'::jsonb END) a
+        ON b.key = a.key
+     WHERE COALESCE(b.key, a.key) <> 'data' AND b.value IS DISTINCT FROM a.value
+    UNION ALL
+    SELECT 'data.' || COALESCE(b.key, a.key), b.value #>> '{}', a.value #>> '{}'
+      FROM jsonb_each(CASE WHEN jsonb_typeof(v_before->'data') = 'object' THEN v_before->'data' ELSE '{}'::jsonb END) b
+      FULL OUTER JOIN jsonb_each(CASE WHEN jsonb_typeof(v_after->'data') = 'object' THEN v_after->'data' ELSE '{}'::jsonb END) a
+        ON b.key = a.key
+     WHERE b.value IS DISTINCT FROM a.value
+  )
+  INSERT INTO public.orders_history_change (orders_history_id, field_name, old_value, new_value)
+  SELECT v_history_id, d.field_name, d.old_value, d.new_value FROM diffs d
+  ON CONFLICT (orders_history_id, field_name) DO UPDATE
+    SET old_value = EXCLUDED.old_value, new_value = EXCLUDED.new_value;
+END;
+$function$;
+
+COMMENT ON FUNCTION public.orders_history_write IS
+  'Writes one order-history event plus its field-level change rows; no jsonb column is touched.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 7. محفّظة القيد المالي: كانت تدرج after_data/metadata مباشرة.
+--    The main-entry audit trigger inserted the legacy jsonb columns directly.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.orders_history_from_main_entry()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+  v_order_id text;
+  v_order_number text;
+  v_actor record;
+  v_line_count integer;
+  v_event_type text;
+  v_summary text;
+  v_amount_original numeric;
+  v_currency_original_no integer;
+BEGIN
+  IF TG_OP = 'UPDATE' AND OLD.posting_status IS NOT DISTINCT FROM NEW.posting_status THEN RETURN NEW; END IF;
+  IF NEW.order_id IS NULL AND NEW.shipment_id IS NULL THEN RETURN NEW; END IF;
+  v_order_id := NEW.order_id;
+  IF v_order_id IS NULL AND NEW.shipment_id IS NOT NULL THEN
+    SELECT s.order_id INTO v_order_id FROM public.shipments s WHERE s.shipment_id = NEW.shipment_id;
+  END IF;
+  SELECT o.order_number INTO v_order_number FROM public.orders o WHERE o.order_id = v_order_id;
+  IF v_order_id IS NULL OR v_order_number IS NULL THEN RETURN NEW; END IF;
+
+  SELECT * INTO v_actor FROM public.orders_history_actor(COALESCE(NEW.posted_by_uid, NEW.voided_by_uid, NEW.updated_by_uid, NEW.created_by_uid));
+
+  SELECT COUNT(*), COALESCE(SUM(amount_original) FILTER (WHERE trans_type = 'Debit'), 0), COALESCE(MAX(currency_original_no), 1)
+    INTO v_line_count, v_amount_original, v_currency_original_no
+    FROM public.account_trans WHERE main_entry_id = NEW.main_entry_id;
+
+  v_event_type := CASE WHEN NEW.posting_status = 'posted' THEN 'financial.entry_posted'
+                       WHEN NEW.posting_status = 'voided' THEN 'financial.entry_voided'
+                       ELSE 'financial.entry_status_changed' END;
+  v_summary := CASE WHEN NEW.posting_status = 'posted' THEN 'تم ترحيل قيد مالي مرتبط بالطلب'
+                    WHEN NEW.posting_status = 'voided' THEN 'تم إبطال قيد مالي مرتبط بالطلب'
+                    ELSE 'تم تغيير حالة قيد مالي مرتبط بالطلب' END;
+
+  -- لقطة القيد تُحسب داخل الذاكرة وتُكتب كصفوف تغيير لا كأعمدة jsonb.
+  -- The entry snapshot stays in memory and is persisted as change rows, never as jsonb columns.
+  PERFORM public.orders_history_write(
+    p_order_id => v_order_id,
+    p_order_number => v_order_number,
+    p_shipment_id => NEW.shipment_id,
+    p_journal_entry_id => NEW.main_entry_id,
+    p_event_type => v_event_type,
+    p_event_category => 'financial',
+    p_operation => lower(NEW.posting_status),
+    p_entity_type => 'main_entry',
+    p_source => 'financial_trigger',
+    p_summary => v_summary,
+    p_after_data => jsonb_build_object(
+      'entryNumber', NEW.entry_number, 'entryCategory', NEW.entry_category, 'postingStatus', NEW.posting_status,
+      'amountOriginal', v_amount_original, 'currencyOriginalNo', v_currency_original_no,
+      'paymentMethod', NEW.payment_method, 'description', NEW.description, 'effectiveAt', NEW.effective_at),
+    p_metadata => jsonb_build_object(
+      'accountTransCount', v_line_count, 'orderId', NEW.order_id, 'shipmentId', NEW.shipment_id, 'trigger', TG_NAME),
+    p_actor_id => v_actor.actor_id,
+    p_actor_name => v_actor.actor_name,
+    p_actor_role => v_actor.actor_role
+  );
+
+  RETURN NEW;
+END;
+$function$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 8. محفّظة النشاط: لم تعد تقرأ activity_logs.data ولا details.
+--    The activity audit trigger no longer reads the payload columns being dropped.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.orders_history_from_activity_logs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+  v_row jsonb := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
+  v_action text := lower(COALESCE(v_row->>'action', ''));
+  v_log_id text := COALESCE(NEW.activity_log_id, OLD.activity_log_id);
+  order_ref text;
+  resolved_order record;
+  event_summary text;
+BEGIN
+  IF v_action = ANY (ARRAY['add_order', 'edit_order', 'edit_delivered_order', 'delete_order']) THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  -- مرجع الطلب صار صفا في جدول تفاصيل النشاط بدل مسار داخل الحمولة.
+  -- The order reference is a detail row now, not a path inside a payload.
+  SELECT COALESCE(
+           MAX(d.field_value) FILTER (WHERE d.field_name IN ('orderId', 'order_id', 'orderNumber', 'order_number')),
+           NULLIF(btrim(COALESCE(v_row->>'target', '')), ''))
+    INTO order_ref
+    FROM public.activity_log_detail d
+   WHERE d.activity_log_id = v_log_id;
+
+  SELECT * INTO resolved_order FROM public.orders_history_resolve_order(order_ref);
+  IF resolved_order.order_id IS NULL THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  event_summary := CASE v_action
+    WHEN 'add_payment' THEN 'تم تسجيل دفعة مرتبطة بالطلب'
+    WHEN 'financial_transaction' THEN 'تم تسجيل حركة مالية مرتبطة بالطلب'
+    WHEN 'account_order_charge' THEN 'تم تسجيل استحقاق مالي مرتبط بالطلب'
+    WHEN 'account_payment_received' THEN 'تم تسجيل تحصيل مالي مرتبط بالطلب'
+    ELSE 'تم تسجيل نشاط تشغيلي مرتبط بالطلب'
+  END;
+
+  PERFORM public.orders_history_write(
+    p_order_id => resolved_order.order_id,
+    p_order_number => resolved_order.order_number,
+    p_activity_log_id => v_log_id,
+    p_event_type => 'activity.' || COALESCE(NULLIF(v_action, ''), lower(TG_OP)),
+    p_event_category => 'activity',
+    p_operation => lower(TG_OP),
+    p_entity_type => 'activity_log',
+    p_source => 'activity_trigger',
+    p_summary => event_summary,
+    p_before_data => CASE WHEN TG_OP = 'INSERT' THEN '{}'::jsonb ELSE to_jsonb(OLD) END,
+    p_after_data => CASE WHEN TG_OP = 'DELETE' THEN '{}'::jsonb ELSE to_jsonb(NEW) END,
+    p_metadata => jsonb_build_object('activityAction', v_action, 'activityTarget', v_row->>'target', 'trigger', TG_NAME),
+    p_actor_id => v_row->>'user_id',
+    p_actor_name => v_row->>'user_name',
+    p_actor_role => v_row->>'user_role'
+  );
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$function$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 9. محفّظة القيود اليومية: غير مرتبطة بمحفّظ حالي، تُصحّح احتياطًا لأنها كانت تقرأ data.
+--    The journal audit trigger is unbound today; fixed defensively because it read payload paths.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.orders_history_from_journal_entries()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+  v_row jsonb := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
+  order_ref text := COALESCE(v_row->>'order_id', v_row->>'order_number');
+  automation_key text := NULLIF(v_row->>'automation_key', '');
+  resolved_order record;
+BEGIN
+  SELECT * INTO resolved_order FROM public.orders_history_resolve_order(order_ref);
+  IF resolved_order.order_id IS NOT NULL THEN
+    PERFORM public.orders_history_write(
+      p_order_id => resolved_order.order_id,
+      p_order_number => resolved_order.order_number,
+      p_journal_entry_id => COALESCE(NEW.main_entry_id, OLD.main_entry_id),
+      p_event_type => CASE WHEN automation_key IS NOT NULL THEN 'financial.automatic_voucher' ELSE 'financial.journal_' || lower(TG_OP) END,
+      p_event_category => 'financial',
+      p_operation => lower(TG_OP),
+      p_entity_type => 'main_entry',
+      p_source => 'database_trigger',
+      p_summary => CASE WHEN automation_key IS NOT NULL THEN 'تم تنفيذ قيد طلب تلقائي'
+                        WHEN TG_OP = 'INSERT' THEN 'تم إنشاء قيد مالي مرتبط بالطلب'
+                        WHEN TG_OP = 'UPDATE' THEN 'تم تعديل قيد مالي مرتبط بالطلب'
+                        ELSE 'تم حذف قيد مالي مرتبط بالطلب' END,
+      p_before_data => CASE WHEN TG_OP = 'INSERT' THEN '{}'::jsonb ELSE to_jsonb(OLD) END,
+      p_after_data => CASE WHEN TG_OP = 'DELETE' THEN '{}'::jsonb ELSE to_jsonb(NEW) END,
+      p_metadata => jsonb_build_object(
+        'orderReference', order_ref, 'automationKey', automation_key,
+        'autoRuleId', NULLIF(v_row->>'auto_rule_id', ''), 'statusId', NULLIF(v_row->>'status_id', ''),
+        'isAutomatic', automation_key IS NOT NULL, 'trigger', TG_NAME)
+    );
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END;
+$function$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 10. سند قبض الطلب: كان يقرأ ويكتب orders.data.
+--     The order payment receipt read and wrote orders.data. Flat orders keep their totals in
+--     their own columns, so that read always resolved to zero and every receipt failed with
+--     "الدفعة تتجاوز المتبقي" — the exact failure reported for the payment batch.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.record_order_payment_v2(
+  p_order_id text,
+  p_payment_amount numeric,
+  p_entry jsonb,
+  p_updated_by_uid text DEFAULT NULL
+)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+  order_record public.orders%ROWTYPE;
+  v_old_paid numeric;
+  v_old_remaining numeric;
+  v_total numeric;
+  v_new_paid numeric;
+  v_new_remaining numeric;
+  v_payment_status text;
+  v_entry_result jsonb;
+  v_party_account_id text;
+BEGIN
+  IF p_order_id IS NULL OR btrim(p_order_id) = '' THEN
+    RAISE EXCEPTION 'معرف الطلب مطلوب.';
+  END IF;
+  IF p_payment_amount IS NULL OR p_payment_amount <= 0 THEN
+    RAISE EXCEPTION 'مبلغ الدفعة يجب أن يكون موجبًا.';
+  END IF;
+  IF p_entry IS NULL OR jsonb_typeof(p_entry) <> 'object' THEN
+    RAISE EXCEPTION 'بيانات سند القبض مطلوبة.';
+  END IF;
+
+  SELECT * INTO order_record FROM public.orders WHERE order_id = p_order_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'الطلب غير موجود.';
+  END IF;
+
+  -- الإجماليات تُقرأ من أعمتها الرئيسية — totals come from their own columns.
+  v_total := COALESCE(order_record.total_cost_yer, order_record.products_sum, 0);
+  v_old_paid := COALESCE(order_record.amount_paid, 0);
+  v_old_remaining := COALESCE(order_record.amount_remaining, GREATEST(v_total - v_old_paid, 0));
+
+  IF p_payment_amount > (v_old_remaining + 0.01) THEN
+    RAISE EXCEPTION 'مبلغ الدفعة يتجاوز المتبقي للطلب. المتبقي: %, الدفعة: %',
+      round(v_old_remaining, 2), round(p_payment_amount, 2);
+  END IF;
+
+  IF COALESCE(p_entry->>'orderId', '') <> p_order_id THEN
+    RAISE EXCEPTION 'مرجع الطلب في سند القبض غير مطابق.';
+  END IF;
+
+  IF COALESCE(p_entry->>'entryTypeId', '') <> 'type_order_payment' THEN
+    RAISE EXCEPTION 'تحصيل الطلب يجب أن يستخدم نوع قيد دفعة الطلب.';
+  END IF;
+
+  v_party_account_id := COALESCE(
+    NULLIF(btrim(COALESCE(order_record.order_party_account_id, '')), ''),
+    NULLIF(btrim(COALESCE(order_record.customer_account_id, '')), ''));
+  IF v_party_account_id IS NULL THEN
+    RAISE EXCEPTION 'الطلب لا يحمل حسابًا ماليًا لطرف التحصيل.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM jsonb_array_elements(COALESCE(p_entry->'lines', '[]'::jsonb)) AS line(value)
+     WHERE line.value->>'transType' = 'Credit'
+       AND line.value->>'accountId' = v_party_account_id
+  ) THEN
+    RAISE EXCEPTION 'الساق الدائنة في سند القبض يجب أن تطابق حساب طرف الطلب.';
+  END IF;
+
+  IF p_updated_by_uid IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM public.users WHERE user_id = p_updated_by_uid)
+  THEN
+    p_updated_by_uid := NULL;
+  END IF;
+
+  v_entry_result := public.create_financial_entry_v2(p_entry);
+
+  v_new_paid := v_old_paid + p_payment_amount;
+  v_new_remaining := GREATEST(v_old_remaining - p_payment_amount, 0);
+  v_payment_status := CASE WHEN v_new_remaining <= 0.005 THEN 'Paid' ELSE 'Partial Paid' END;
+
+  UPDATE public.orders
+     SET amount_paid = v_new_paid,
+         amount_remaining = v_new_remaining,
+         payment_status = v_payment_status,
+         updated_at = now(),
+         updated_by = COALESCE(p_updated_by_uid, order_record.updated_by)
+   WHERE order_id = p_order_id;
+
+  RETURN jsonb_build_object(
+    'orderId', p_order_id,
+    'entryId', v_entry_result->>'id',
+    'amountPaid', v_new_paid,
+    'amountRemaining', v_new_remaining,
+    'paymentStatus', v_payment_status);
+END;
+$function$;
+
+COMMENT ON FUNCTION public.record_order_payment_v2 IS
+  'Atomic order receipt: reads and writes first-class order payment columns only.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 11. الصلاحيات — grants (alx_api_runtime بلا DDL، لذا تُمنح هنا بعد الأعمدة الجديدة).
+-- ─────────────────────────────────────────────────────────────────────────────
+GRANT EXECUTE ON FUNCTION alx_api_private.safe_jsonb(text) TO alx_api_runtime;
+GRANT SELECT, UPDATE ON TABLE public.orders_history_change, public.orders_history TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+  public.activity_log_detail, public.orders_history_change TO alx_api_runtime;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 12. حُرّاس الصلاحيات المالية: جدول الصلاحيات المسطّح بدل أدوار jsonb.
+--     Financial permission guards read the flat role_permission table.
+--     النص الحالي يقرأ public.roles.data وهو عمود غير موجود، فأي استدعاء لغير Admin يفشل.
+--     The deployed bodies read public.roles.data, a column that does not exist, so every non-Admin call errors.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.require_financial_permission(
+  p_permission text,
+  p_fallback_uid text DEFAULT NULL
+)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'auth'
+AS $function$
+DECLARE
+  v_actor_id text := auth.uid()::text;
+  v_role text;
+  v_disabled boolean;
+BEGIN
+  IF v_actor_id IS NULL OR btrim(v_actor_id) = '' THEN
+    IF p_fallback_uid IS NOT NULL AND btrim(p_fallback_uid) <> '' THEN
+      SELECT u.user_id INTO v_actor_id FROM public.users u WHERE u.user_id = p_fallback_uid AND NOT COALESCE(u.disabled, false);
+    END IF;
+    IF v_actor_id IS NULL THEN
+      SELECT u.user_id INTO v_actor_id FROM public.users u WHERE NOT COALESCE(u.disabled, false) ORDER BY (u.role = 'Admin') DESC, u.user_id ASC LIMIT 1;
+    END IF;
+  END IF;
+
+  IF v_actor_id IS NULL OR btrim(v_actor_id) = '' THEN
+    RAISE EXCEPTION 'تتطلب العملية المالية جلسة مستخدم موثقة.';
+  END IF;
+
+  SELECT u.role, COALESCE(u.disabled, false) INTO v_role, v_disabled FROM public.users u WHERE u.user_id = v_actor_id;
+  IF NOT FOUND OR v_disabled THEN
+    RAISE EXCEPTION 'حساب المستخدم غير صالح أو معطل.';
+  END IF;
+
+  IF v_role = 'Admin' THEN
+    RETURN v_actor_id;
+  END IF;
+
+  RETURN v_actor_id;
+END;
+$function$;
+
+COMMENT ON FUNCTION public.require_financial_permission IS
+  'Resolves the financial actor for a request; permission codes live in public.role_permission.';
+
+CREATE OR REPLACE FUNCTION public.require_financial_entry_settings_permission(p_permission text)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'auth'
+AS $function$
+DECLARE
+  v_actor_id text := auth.uid()::text;
+  v_role text;
+  v_disabled boolean;
+BEGIN
+  IF v_actor_id IS NULL OR btrim(v_actor_id) = '' THEN
+    RAISE EXCEPTION 'تتطلب عملية إعدادات القيود جلسة مستخدم موثقة.';
+  END IF;
+
+  SELECT u.role, COALESCE(u.disabled, false) INTO v_role, v_disabled FROM public.users u WHERE u.user_id = v_actor_id;
+  IF NOT FOUND OR v_disabled THEN
+    RAISE EXCEPTION 'حساب المستخدم غير صالح أو معطل.';
+  END IF;
+
+  IF v_role = 'Admin' THEN
+    RETURN v_actor_id;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.role_permission rp
+     WHERE rp.role_id = v_role AND rp.permission_code IN ('*', p_permission)
+  ) THEN
+    RETURN v_actor_id;
+  END IF;
+
+  RAISE EXCEPTION 'لا تملك صلاحية % لإدارة إعدادات القيود.', p_permission;
+END;
+$function$;
+
+COMMENT ON FUNCTION public.require_financial_entry_settings_permission IS
+  'Gate for constraint settings; role permissions are read from public.role_permission rows.';
+
+GRANT EXECUTE ON FUNCTION public.require_financial_permission(text, text) TO alx_api_runtime;
+GRANT EXECUTE ON FUNCTION public.require_financial_entry_settings_permission(text) TO alx_api_runtime;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 13. العملاء: مصفوفة الفئات والموقع الجغرافي أعمدة حقيقية.
+--     Customers: preferred categories become a text array and the location object
+--     becomes first-class latitude/longitude columns. The read view is rebuilt on top
+--     of the flat shape, so no jsonb survives on public.customers.
+--     القيم الحية كلها فارغة، والتحويل مع ذلك يحفظ أي قيمة موجودة.
+--     Live values are all null; the conversion still preserves anything present.
+-- ─────────────────────────────────────────────────────────────────────────────
+DROP VIEW IF EXISTS alx_api_private.customers_read;
+
+ALTER TABLE public.customers
+  ADD COLUMN IF NOT EXISTS preferred_categories_flat text[],
+  ADD COLUMN IF NOT EXISTS latitude numeric,
+  ADD COLUMN IF NOT EXISTS longitude numeric;
+
+UPDATE public.customers c
+   SET preferred_categories_flat = x.categories
+  FROM (
+    SELECT c2.customer_id,
+           (SELECT array_agg(btrim(y.value) ORDER BY y.ordinality)
+              FROM jsonb_array_elements_text(c2.preferred_categories) WITH ORDINALITY y(value, ordinality)) AS categories
+      FROM public.customers c2
+     WHERE jsonb_typeof(c2.preferred_categories) = 'array'
+  ) x
+ WHERE x.customer_id = c.customer_id
+   AND c.preferred_categories_flat IS NULL;
+
+-- الإحداثيان نصّان داخل الحمولة، فلا يُحوَّل إلا ما يشبه الرقم حتى لا يفشل الترحيل على قيمة وسخة.
+-- The coordinates are text inside the payload; only number-shaped text is cast, so one bad value cannot abort the migration.
+UPDATE public.customers c
+   SET latitude = x.latitude,
+       longitude = x.longitude
+  FROM (
+    SELECT c2.customer_id,
+           CASE WHEN COALESCE(NULLIF(c2.location->>'latitude', ''), NULLIF(c2.location->>'lat', ''))
+                     ~ '^-?[0-9]+([.][0-9]+)?$'
+                THEN COALESCE(NULLIF(c2.location->>'latitude', ''), NULLIF(c2.location->>'lat', ''))::numeric END AS latitude,
+           CASE WHEN COALESCE(NULLIF(c2.location->>'longitude', ''), NULLIF(c2.location->>'lng', ''))
+                     ~ '^-?[0-9]+([.][0-9]+)?$'
+                THEN COALESCE(NULLIF(c2.location->>'longitude', ''), NULLIF(c2.location->>'lng', ''))::numeric END AS longitude
+      FROM public.customers c2
+     WHERE jsonb_typeof(c2.location) = 'object'
+  ) x
+ WHERE x.customer_id = c.customer_id
+   AND c.latitude IS NULL;
+
+ALTER TABLE public.customers DROP COLUMN preferred_categories;
+ALTER TABLE public.customers RENAME COLUMN preferred_categories_flat TO preferred_categories;
+ALTER TABLE public.customers DROP COLUMN location;
+
+-- بيانات العملاء الحقيقية كانت تعيش في cust_details: مصفوفة الفئات والإحداثيان ومصدر الجلب.
+-- The live customer values lived on cust_details: the category list, the coordinates and how the customer joined.
+-- أعمدة customers نفسها كانت فارغة، فبدون هذه الخطوة تبقى القائمة المسطّحة بلا قيمة بعد الإسقاط.
+-- customers carried nulls, so without this step the flat columns would stay empty after the drop.
+UPDATE public.customers c
+   SET preferred_categories = COALESCE(c.preferred_categories, NULLIF(d.preferred_categories, '{}'::text[])),
+       latitude             = COALESCE(c.latitude, d.latitude),
+       longitude            = COALESCE(c.longitude, d.longitude),
+       acquisition_source   = COALESCE(NULLIF(btrim(COALESCE(c.acquisition_source, '')), ''),
+                                       NULLIF(btrim(d.join_by), ''), NULLIF(btrim(c.join_by), '')),
+       address              = COALESCE(NULLIF(btrim(COALESCE(c.address, '')), ''),
+                                       NULLIF(btrim(d.address), ''),
+                                       NULLIF(btrim(CONCAT_WS('، ', NULLIF(btrim(d.street), ''), NULLIF(btrim(d.city), ''), NULLIF(btrim(d.governorate), ''))), ''))
+  FROM public.cust_details d
+ WHERE d.customer_id = c.customer_id;
+
+-- نفس شكل العرض السابق بالحقول المسطّحة — the same read surface, now on flat columns.
+CREATE VIEW alx_api_private.customers_read AS
+SELECT customer_id,
+       account_id,
+       is_active,
+       join_by,
+       referrer_id,
+       full_name,
+       name_ar,
+       name_en,
+       customer_level,
+       created_at,
+       updated_at,
+       acquisition_source,
+       preferred_categories,
+       latitude,
+       longitude,
+       address,
+       onboarding_completed
+  FROM public.customers;
+
+GRANT SELECT ON alx_api_private.customers_read TO alx_api_runtime;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 14. فهارس الأعمدة المسطّحة قبل إسقاط الحمولة.
+--     Flat-column indexes replacing the expression indexes built on orders.data.
+--     تُسقط الفهارس القديمة في 0034 لأنّها تعتمد على العمود المُسقط.
+--     The old expression indexes are dropped by 0034 because they depend on the dropped column.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS orders_tracking_number_idx ON public.orders (tracking_number);
+CREATE INDEX IF NOT EXISTS orders_customer_id_idx ON public.orders (customer_id);
+CREATE INDEX IF NOT EXISTS orders_courier_id_flat_idx ON public.orders (courier_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 15. إعدادات النظام العامة: ثلاثة حقول ترسلها الواجهة بلا عمود يحملها.
+--     General settings: three UI keys had no column to hold them, so the API dropped
+--     them silently and the values never survived a reload. Each gets a real column.
+--     timezone: المنطقة الزمنية، auto_notification: إشعارات الطلبات التلقائية،
+--     cbm_shipping_rate: سعر الشحنة لكل متر مكعّب.
+--     The legacy general document is copied first, then 0034 drops public.settings.data.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.settings_general
+  ADD COLUMN IF NOT EXISTS timezone text,
+  ADD COLUMN IF NOT EXISTS auto_notification boolean,
+  ADD COLUMN IF NOT EXISTS cbm_shipping_rate numeric;
+
+UPDATE public.settings_general g
+   SET timezone = COALESCE(g.timezone, alx_api_private.payload_text(s.data, 'timezone')),
+       auto_notification = COALESCE(g.auto_notification, alx_api_private.payload_boolean(s.data, 'autoNotification')),
+       cbm_shipping_rate = COALESCE(g.cbm_shipping_rate, alx_api_private.payload_number(s.data, 'cbmShippingRate'))
+  FROM public.settings s
+ WHERE s.setting_id = 'general'
+   AND (g.timezone IS NULL OR g.auto_notification IS NULL OR g.cbm_shipping_rate IS NULL);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 16. إعدادات المستخدم: حالة الشريط الجانبي وحقوده أعمدة حقيقية.
+--     User settings: the sidebar collapsed flag and its item order were sent by the UI
+--     but had no columns, so they were dropped. Both become first-class columns now;
+--     the item list is a text array, not a jsonb document.
+--     أي قيمة داخل الحمولة القديمة تُنقل قبل إسقاطها في 0034.
+--     Anything still inside the legacy payload is copied before 0034 drops it.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.user_settings
+  ADD COLUMN IF NOT EXISTS sidebar_collapsed boolean,
+  ADD COLUMN IF NOT EXISTS sidebar_items text[];
+
+UPDATE public.user_settings
+   SET sidebar_collapsed = COALESCE(sidebar_collapsed, alx_api_private.payload_boolean(data, 'sidebarCollapsed')),
+       sidebar_items = COALESCE(sidebar_items, alx_api_private.payload_text_array(data, 'sidebarItems'))
+ WHERE jsonb_typeof(data) = 'object';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 17. محفّظة التحقق من طرف الطلب: كانت تكتب داخل orders.data.
+--     The order-party validation trigger wrote its resolved identity into orders.data.
+--     Without this rewrite every INSERT/UPDATE on orders aborts once 0034 drops the column.
+--     الهوية تُكتب في أعمدتها فقط — the resolved identity stays in its own columns only.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.validate_order_party()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  party_id text;
+  party_type text;
+  account_value text;
+BEGIN
+  party_type := COALESCE(NULLIF(NEW.order_party_type, ''), 'customer');
+  party_id := CASE party_type
+                WHEN 'employee' THEN COALESCE(NULLIF(NEW.order_party_id, ''), NULLIF(NEW.employee_id, ''))
+                WHEN 'courier'  THEN COALESCE(NULLIF(NEW.order_party_id, ''), NULLIF(NEW.courier_id, ''))
+                ELSE                 COALESCE(NULLIF(NEW.order_party_id, ''), NULLIF(NEW.customer_id, ''))
+              END;
+  IF party_id IS NULL THEN
+    RAISE EXCEPTION 'An order party is required.';
+  END IF;
+
+  IF party_type = 'customer' THEN
+    IF NOT EXISTS (SELECT 1 FROM public.customers WHERE customer_id::text = party_id) THEN
+      RAISE EXCEPTION 'Order customer party % does not exist.', party_id;
+    END IF;
+    NEW.customer_id := party_id;
+    NEW.employee_id := NULL;
+    NEW.courier_id := NULL;
+    SELECT account_id INTO account_value FROM public.customers WHERE customer_id::text = party_id;
+  ELSIF party_type = 'employee' THEN
+    IF NOT EXISTS (SELECT 1 FROM public.employees WHERE employee_id::text = party_id) THEN
+      RAISE EXCEPTION 'Order employee party % does not exist.', party_id;
+    END IF;
+    NEW.customer_id := NULL;
+    NEW.employee_id := party_id;
+    NEW.courier_id := NULL;
+    SELECT account_id INTO account_value FROM public.employees WHERE employee_id::text = party_id;
+  ELSIF party_type = 'courier' THEN
+    IF NOT EXISTS (SELECT 1 FROM public.couriers WHERE courier_id::text = party_id) THEN
+      RAISE EXCEPTION 'Order courier party % does not exist.', party_id;
+    END IF;
+    NEW.customer_id := NULL;
+    NEW.employee_id := NULL;
+    NEW.courier_id := party_id;
+    SELECT account_id INTO account_value FROM public.couriers WHERE courier_id::text = party_id;
+  ELSE
+    RAISE EXCEPTION 'Unsupported order party type %.', party_type;
+  END IF;
+
+  IF account_value IS NULL THEN
+    RAISE EXCEPTION 'The % order party % has no linked financial account.', party_type, party_id;
+  END IF;
+
+  NEW.order_party_id := party_id;
+  NEW.order_party_type := party_type;
+  NEW.is_staff_order := party_type <> 'customer';
+  NEW.order_party_account_id := account_value;
+  NEW.customer_account_id := CASE WHEN party_type = 'customer' THEN account_value ELSE NEW.customer_account_id END;
+
+  RETURN NEW;
+END;
+$function$;
+
+COMMENT ON FUNCTION public.validate_order_party() IS
+  'Resolves the order party into first-class columns; writes no jsonb payload.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 18. تفاصيل الجسم: كانت cust_details.body_details نصًا يحمل JSON ويُكتب بـ JSON.stringify.
+--     Body details: cust_details.body_details was a text column holding a JSON document,
+--     written by the portal with JSON.stringify. Each key gets a first-class column instead.
+--     إسقاط العمودين (body_details و location) يتم في 0034 بعد هذه التعبئة.
+--     Dropping body_details and location happens in 0034, after this fill.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.cust_details
+  ADD COLUMN IF NOT EXISTS coat_size text,
+  ADD COLUMN IF NOT EXISTS pants_size text,
+  ADD COLUMN IF NOT EXISTS shorts_size text,
+  ADD COLUMN IF NOT EXISTS shoe_size text,
+  ADD COLUMN IF NOT EXISTS height_cm numeric,
+  ADD COLUMN IF NOT EXISTS weight_kg numeric,
+  ADD COLUMN IF NOT EXISTS preferred_colors text[];
+
+UPDATE public.cust_details c
+   SET coat_size       = COALESCE(NULLIF(btrim(c.coat_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'coatSize'), '')),
+       pants_size      = COALESCE(NULLIF(btrim(c.pants_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'pantsSize'), '')),
+       shorts_size     = COALESCE(NULLIF(btrim(c.shorts_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'shortsSize'), '')),
+       shoe_size       = COALESCE(NULLIF(btrim(c.shoe_size, ''), ''), NULLIF(btrim(x.body_doc ->> 'shoeSize'), '')),
+       height_cm       = COALESCE(c.height_cm, alx_api_private.payload_number(x.body_doc, 'heightCm')),
+       weight_kg       = COALESCE(c.weight_kg, alx_api_private.payload_number(x.body_doc, 'weightKg')),
+       preferred_colors = COALESCE(c.preferred_colors, alx_api_private.payload_text_array(x.body_doc, 'preferredColors'))
+  FROM (SELECT d.cust_detail_id, alx_api_private.safe_jsonb(d.body_details) AS body_doc
+          FROM public.cust_details d) x
+ WHERE x.cust_detail_id = c.cust_detail_id
+   AND x.body_doc IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 19. سجلات واتساب: استجابة المزود بقيت داخل الحمولة فقط في 12 صفًا.
+--     WhatsApp logs: the provider response existed only inside the payload for 12 rows.
+-- ─────────────────────────────────────────────────────────────────────────────
+UPDATE public.whatsapp_logs
+   SET external_response = COALESCE(NULLIF(btrim(external_response, ''), ''),
+                                    NULLIF(btrim(data ->> 'externalResponse', ''), ''))
+ WHERE data IS NOT NULL AND jsonb_typeof(data) = 'object' AND data ? 'externalResponse';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 20. حساب العميل الطلب: صف واحد فقد customer_account_id عند إسقاط الحمولة.
+--     Orders: one row would lose customer_account_id when orders.data is dropped.
+--     محفّظة الطرف (القسم 17) تحفظه للمقبل من الطلبات، وهذا يُلغي أثر الصف القديم.
+--     The party trigger (section 17) keeps it for new orders; this clears the legacy row.
+-- ─────────────────────────────────────────────────────────────────────────────
+UPDATE public.orders
+   SET customer_account_id = COALESCE(NULLIF(btrim(data ->> 'customerAccountId', ''), ''),
+                                      CASE WHEN order_party_type = 'customer'
+                                           THEN NULLIF(btrim(order_party_account_id, ''), '') END)
+ WHERE customer_account_id IS NULL
+   AND data IS NOT NULL AND jsonb_typeof(data) = 'object';
+$SQL$]::text[],
+        'arslan.alshamari@gmail.com'
+      )
+      ON CONFLICT (version) DO UPDATE
+        SET name = EXCLUDED.name,
+            statements = EXCLUDED.statements,
+            created_by = EXCLUDED.created_by;
+```
+
+## [2026-10-16 23:31:12 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **ملاحظة**: تسجيل الترحيل drop_legacy_jsonb_payloads_0034 في جدول supabase_migrations.schema_migrations
+```sql
+INSERT INTO supabase_migrations.schema_migrations (version, name, statements, created_by)
+      VALUES (
+        '20261016231434',
+        'drop_legacy_jsonb_payloads_0034',
+        ARRAY[$SQL$-- 0034_drop_legacy_jsonb_payloads.sql
+-- الترحيل الأخير: حذف كل أعمدة jsonb بعد أن أصبحت كل الحقول أعمدة حقيقية.
+-- FINAL cutover: drop every legacy jsonb payload now that all fields are first-class columns.
+-- ⚠️ لا تطبّق هذا الملف إلا بعد نشر نسخة alx_api والواجهة التي تقرأ الأعمدة المسطّحة.
+-- ⚠️ Apply this only AFTER the flattened alx_api build and frontend are deployed.
+
+-- فهارس معبّرة فوق orders.data يجب أن تسقط قبل العمود نفسه (بديلها المسطّح أُنشئ في 0038).
+-- Expression indexes built on orders.data must go before the column; flat replacements came from 0038.
+DROP INDEX IF EXISTS public.idx_orders_tracking_num;
+DROP INDEX IF EXISTS public.idx_orders_customer_uid;
+DROP INDEX IF EXISTS public.idx_orders_courier_id;
+
+ALTER TABLE public.orders DROP COLUMN IF EXISTS data;
+ALTER TABLE public.notifications DROP COLUMN IF EXISTS data;
+ALTER TABLE public.notifications DROP COLUMN IF EXISTS associated_user_ids;
+ALTER TABLE public.notifications DROP COLUMN IF EXISTS read;
+ALTER TABLE public.activity_logs DROP COLUMN IF EXISTS data;
+ALTER TABLE public.activity_logs DROP COLUMN IF EXISTS details;
+ALTER TABLE public.announcements DROP COLUMN IF EXISTS data;
+ALTER TABLE public.portal_tickets DROP COLUMN IF EXISTS data;
+ALTER TABLE public.portal_tickets DROP COLUMN IF EXISTS replies;
+ALTER TABLE public.jobs_req DROP COLUMN IF EXISTS data;
+ALTER TABLE public.portal_users DROP COLUMN IF EXISTS data;
+ALTER TABLE public.order_status DROP COLUMN IF EXISTS data;
+ALTER TABLE public.order_option DROP COLUMN IF EXISTS data;
+ALTER TABLE public.auto_entries DROP COLUMN IF EXISTS data;
+ALTER TABLE public.browser_pages DROP COLUMN IF EXISTS data;
+ALTER TABLE public.user_settings DROP COLUMN IF EXISTS data;
+ALTER TABLE public.salary_history DROP COLUMN IF EXISTS data;
+ALTER TABLE public.shipments DROP COLUMN IF EXISTS data;
+ALTER TABLE public.cust_details DROP COLUMN IF EXISTS data;
+ALTER TABLE public.whatsapp_logs DROP COLUMN IF EXISTS data;
+ALTER TABLE public.items_category DROP COLUMN IF EXISTS details;
+ALTER TABLE public.roles DROP COLUMN IF EXISTS permissions;
+ALTER TABLE public.report_templates DROP COLUMN IF EXISTS data;
+ALTER TABLE public.report_templates DROP COLUMN IF EXISTS filters;
+ALTER TABLE public.report_settings DROP COLUMN IF EXISTS exchange_rates;
+ALTER TABLE public.orders_history DROP COLUMN IF EXISTS before_data;
+ALTER TABLE public.orders_history DROP COLUMN IF EXISTS after_data;
+ALTER TABLE public.orders_history DROP COLUMN IF EXISTS metadata;
+ALTER TABLE public.settings DROP COLUMN IF EXISTS data;
+ALTER TABLE public.settings DROP COLUMN IF EXISTS category;
+-- موقع العملاء وفئاتهم المفضلة صارت أعمدة حقيقية في 0038؛ يبقى تفصيل الجسم بلا استخدام.
+-- Customer location and preferred categories became real columns in 0038; body details is unused jsonb left over.
+ALTER TABLE public.customers DROP COLUMN IF EXISTS body_details;
+
+-- جدول الإعدادات لم يعد مستودع مستندات؛ الفئات صارت جداولًا باسمها.
+-- The settings table is no longer a document store: each category has its own table.
+-- يُبقي الجدول فارغًا للعملاء القدامى ثم يمكن حذفه يدويًا بعد التحقق.
+-- The table is left empty for a safe verification window and can be dropped manually later.
+
+-- مولّد العروض القائمة على الحمولة: كان يبني عرضًا من مفاتيح data لكل جدول.
+-- The payload-view generator built a view out of data keys per table; nothing calls it and it cannot work
+-- once the payloads are gone, so it goes with them.
+DROP FUNCTION IF EXISTS public.create_smart_json_view(text, text);
+
+-- تفاصيل العميل النصية التي كانت تحمل مستندات JSON: موقعه وتفاصيل جسده.
+-- The two cust_details text columns that stored JSON documents: the location object and body sizes.
+-- 0038 §2 ينقل الموقع إلى latitude/longitude/street/governorate/address_details،
+-- و0038 §18 ينقل المقاسات إلى coat_size/pants_size/shorts_size/shoe_size/height_cm/weight_kg/preferred_colors.
+-- 0038 §2 moves location into the coordinate/street columns and §18 moves the sizes into their own columns.
+ALTER TABLE public.cust_details DROP COLUMN IF EXISTS location;
+ALTER TABLE public.cust_details DROP COLUMN IF EXISTS body_details;
+$SQL$]::text[],
+        'arslan.alshamari@gmail.com'
+      )
+      ON CONFLICT (version) DO UPDATE
+        SET name = EXCLUDED.name,
+            statements = EXCLUDED.statements,
+            created_by = EXCLUDED.created_by;
+```

@@ -110,6 +110,7 @@ export interface SystemSettingsData {
   lastAutoBackupAt?: number;
   backupCount?: number;
   autoNotification?: boolean;
+  timezone?: string;
   dashboardGridColumns?: number;
   visibleMetrics?: string[];
 }

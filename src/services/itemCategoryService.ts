@@ -13,7 +13,11 @@ export interface ItemCategory {
   feeCurrency: string;
   requiresReview: boolean;
   isActive: boolean;
-  details?: Record<string, unknown>;
+  // أعمدة items_category الحقيقية بعد إسقاط عمود details المفهرس (الترحيل 0034).
+  // First-class items_category columns after the details jsonb column was dropped (migration 0034).
+  groupName?: string | null;
+  requiresHighValueReview?: boolean;
+  requiresHazardReview?: boolean;
   createdAt?: number;
   updatedAt?: number;
 }

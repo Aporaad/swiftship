@@ -41,7 +41,8 @@ export interface ReportSettingsDatabaseRow {
   report_setting_id: string;
   default_currency: string | null;
   alternative_currency: string | null;
-  exchange_rates: unknown;
+  // أسعار الصرف لم تعد عمود jsonb في report_settings؛ تعيش صفوفًا في report_exchange_rate.
+  // Exchange rates are no longer a report_settings jsonb column; they live as report_exchange_rate rows.
   updated_at: string | null;
   created_at: string | null;
   created_by: string | null;

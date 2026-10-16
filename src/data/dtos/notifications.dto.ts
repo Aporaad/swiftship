@@ -1,54 +1,57 @@
 import type { AuditDto, IsoUtcString } from './common.dto';
 
-/** JSON payload written by the legacy notification service; credentials are not present here. */
-export interface NotificationPayload {
-  title?: string | null;
-  message?: string | null;
-  link?: string | null;
-  orderId?: string | null;
-  userId?: string | null;
-  associatedUserIds?: string[] | null;
-  isPublic?: boolean | null;
-  read?: boolean | null;
-  category?: 'order' | 'finance' | 'system' | string | null;
-  type?: 'info' | 'success' | 'warning' | 'error' | string | null;
-  creatorId?: string | null;
-  creatorName?: string | null;
-}
-
-export interface ActivityLogPayload {
-  userName?: string | null;
-  userRole?: string | null;
-  details?: Record<string, unknown> | null;
-  timestamp?: IsoUtcString | number | string | null;
-}
-
+/**
+ * أعمدة notifications الحقيقية بعد إسقاط عمود jsonb (الترحيل 0034).
+ * Real notifications columns after the jsonb payload column was dropped (migration 0034).
+ * لا يوجد عمود link ولا order_id؛ هذان الحقلان بقيا في شكل الواجهة فقط.
+ * There is no link or order_id column; those fields remain in the API/UI shape only.
+ */
 export interface NotificationsDatabaseRow {
   notification_id: string;
-  data: NotificationPayload | null;
   user_id: string | null;
   category: string | null;
   is_public: boolean;
-  read: boolean;
+  /** حالة القراءة المسطّحة بدل عمود read المفهرس. Flat read state replacing the legacy read column. */
+  is_read: boolean;
+  /** مستلمو الإشعار: نص مصفوفي + صفوف notification_recipient. Recipients: text array plus notification_recipient rows. */
+  recipient_ids: string[] | null;
+  title: string | null;
+  message: string | null;
   type: string | null;
+  creator_id: string | null;
+  creator_name: string | null;
   created_at: string;
   updated_at: string | null;
   created_by: string | null;
   updated_by: string | null;
 }
 
+/**
+ * أعمدة activity_logs بعد الإسقاط: التفاصيل النصية في عمود details وصفوف activity_log_detail لكل حقل.
+ * activity_logs columns after the drop: free text in details plus one activity_log_detail row per field.
+ */
 export interface ActivityLogDatabaseRow {
   activity_log_id: string;
-  data: ActivityLogPayload | null;
   user_id: string | null;
+  user_name: string | null;
+  user_role: string | null;
   action: string | null;
   category: string | null;
   target: string | null;
   type: string | null;
+  summary: string | null;
+  /** نص حر (عمود text)، وليس حمولة jsonb. Free text (a text column), never a jsonb payload. */
+  details: string | null;
   created_at: string;
   updated_at: string | null;
   created_by: string | null;
   updated_by: string | null;
+}
+
+/** صف activity_log_detail ابن: حقل واحد باسمه وقيمته النصية. One child activity_log_detail row: field name and text value. */
+export interface ActivityLogDetailRow {
+  field_name?: unknown;
+  field_value?: unknown;
 }
 
 export interface NotificationsApiDto {

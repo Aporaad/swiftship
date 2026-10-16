@@ -9,16 +9,19 @@ import type { OrderHistoryEvent } from './orderHistoryService';
 const events: OrderHistoryEvent[] = [
   {
     id: 'order-change', eventType: 'order.status_changed', eventCategory: 'order', operation: 'update', entityType: 'order',
-    actorId: 'user-1', actorName: 'أحمد', summary: 'تم تحديث حالة الطلب إلى تم الشحن', occurredAt: '2026-08-22T09:30:00.000Z',
-    metadata: { changes: { 'data.orderStatus': { before: 'قيد المعالجة', after: 'تم الشحن' } } },
+    actorId: 'user-1', actorName: 'أحمد', summary: 'تم تحديث حالة الطلب', occurredAt: '2026-08-22T09:30:00.000Z',
+    changedFields: ['data.orderStatus'],
+    changes: [{ fieldName: 'data.orderStatus', oldValue: 'قيد المعالجة', newValue: 'تم الشحن' }],
   },
   {
     id: 'shipment-change', eventType: 'shipment.created', eventCategory: 'shipment', operation: 'insert', entityType: 'shipment',
     actorId: 'user-2', actorName: 'سارة', summary: 'تم إنشاء شحنة مرتبطة بالطلب', occurredAt: '2026-08-20T17:45:00.000Z', shipmentId: 'SHP-9',
+    changedFields: ['shipmentId'], changes: [{ fieldName: 'shipmentId', oldValue: null, newValue: 'SHP-9' }],
   },
   {
     id: 'finance-change', eventType: 'financial.journal_insert', eventCategory: 'financial', operation: 'insert', entityType: 'journal_entry',
     actorName: 'النظام', summary: 'تم إنشاء قيد مالي مرتبط بالطلب', occurredAt: '2026-07-15T21:15:00.000Z', mainEntryId: 'JE-3',
+    changedFields: [], changes: [],
   },
 ];
 
@@ -33,12 +36,14 @@ describe('filterOrderHistoryEvents', () => {
     expect(result.map((event) => event.id)).toEqual(['order-change']);
   });
 
-  it('searches summary and nested event details', () => {
+  it('searches the summary and the flat change values', () => {
     const bySummary = filterOrderHistoryEvents(events, { ...defaultOrderHistoryFilters, query: 'شحنة مرتبطة' });
-    const byNestedChange = filterOrderHistoryEvents(events, { ...defaultOrderHistoryFilters, query: 'تم الشحن' });
+    const byChangedValue = filterOrderHistoryEvents(events, { ...defaultOrderHistoryFilters, query: 'تم الشحن' });
+    const byChangedField = filterOrderHistoryEvents(events, { ...defaultOrderHistoryFilters, query: 'orderStatus' });
 
     expect(bySummary.map((event) => event.id)).toEqual(['shipment-change']);
-    expect(byNestedChange.map((event) => event.id)).toEqual(['order-change']);
+    expect(byChangedValue.map((event) => event.id)).toEqual(['order-change']);
+    expect(byChangedField.map((event) => event.id)).toEqual(['order-change']);
   });
 
   it('combines relative time, date, and time-of-day filters', () => {

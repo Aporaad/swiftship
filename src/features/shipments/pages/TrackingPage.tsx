@@ -27,6 +27,8 @@ import {
   Info
 } from 'lucide-react';
 import { ApiClient, ApiClientError } from '../../../data/http/api-client';
+import { orderHistoryService } from '../../../services/orderHistoryService';
+import { readOrderTrackingRow, readTrackingProfileRow, trackingProfileWritePayload } from '../../../services/trackingProfileService';
 import { useSettings } from '../../../context/SettingsContext';
 import { useOrderStatuses } from '../../../hooks/useOrderStatuses';
 import { Link, useNavigate } from 'react-router-dom';
@@ -64,14 +66,6 @@ type ApiRow = Record<string, unknown>;
 
 function readText(value: unknown): string {
   return typeof value === 'string' ? value : '';
-}
-
-function readNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 function isNotFound(error: unknown): boolean {
@@ -181,47 +175,18 @@ export default function TrackingPage() {
     return 'border-amber-500/20 text-amber-400 bg-amber-950/10';
   };
 
-  function readRecord(value: unknown): ApiRow {
-    if (typeof value === 'string') {
-      try {
-        const parsed: unknown = JSON.parse(value);
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as ApiRow : {};
-      } catch {
-        return {};
-      }
-    }
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as ApiRow : {};
-  }
-
   // Staff fallback: resolve published tracking profiles and internal orders through alx_api.
+  // الحقول تُقرأ مسطّحة من الصف نفسه: لم تعد أعمدة jsonb (orders.data / public_tracking.data) موجودة.
+  // Fields are read flat off the row itself: the jsonb columns (orders.data / public_tracking.data) are gone.
   const lookupInternalViaApi = async (queryStr: string): Promise<boolean> => {
     const publicId = queryStr.toUpperCase();
     try {
       const envelope = await client.get<{ success: true; data: ApiRow }>(profilePath(publicId));
-      const row = envelope.data;
-      const profile = readRecord(row.data);
-      const status = readText(row.status) || readText(profile.status) || 'تم تسجيل الطلب';
-      setTrackingData({
-        id: readText(row.trackingId) || publicId,
-        trackingNumber: readText(profile.trackingNumber) || publicId,
-        orderNumber: readText(profile.orderNumber) || readText(row.orderNumber),
-        status,
-        customerName: readText(profile.customerName),
-        customerPhone: readText(profile.customerPhone),
-        customerAddress: readText(profile.customerAddress) || 'صنعاء، اليمن',
-        weight: readNumber(profile.weight),
-        cbm: readNumber(profile.cbm),
-        shippingCompany: readText(profile.shippingCompany),
-        amountPaid: readNumber(profile.amountPaid),
-        amountRemaining: readNumber(profile.amountRemaining),
-        totalCostYER: readNumber(profile.totalCostYER),
-        currency: readText(profile.currency) || 'YER',
-        products: readArray(profile.products),
-        history: readArray(profile.history),
-      });
+      const profile = readTrackingProfileRow(envelope.data, publicId);
+      setTrackingData(profile);
       setResolvedSource('public');
-      setGpsLocation(readText(row.locationYemen) || readText(profile.locationYemen) || 'مستودع الفرز والتبريد');
-      setStatusSelector(status);
+      setGpsLocation(profile.locationYemen);
+      setStatusSelector(profile.status);
       return true;
     } catch (error) {
       if (!isNotFound(error)) console.error('[TrackingPage] tracking profile lookup failed:', error);
@@ -234,30 +199,22 @@ export default function TrackingPage() {
         rows.find((row) => readText(row.trackingNumber).toUpperCase() === publicId) ??
         rows.find((row) => readText(row.orderNumber).toUpperCase() === publicId);
       if (!match) return false;
-      const detail = await client.get<{ success: true; data: ApiRow }>(`/api/v1/orders/${encodeURIComponent(readText(match.orderId))}`);
-      const order = readRecord(detail.data.data);
-      const status = readText(detail.data.orderStatus) || readText(order.orderStatus) || 'تم تسجيل الطلب';
-      setTrackingData({
-        id: readText(detail.data.orderId),
-        trackingNumber: readText(detail.data.trackingNumber) || readText(detail.data.orderNumber) || publicId,
-        orderNumber: readText(detail.data.orderNumber),
-        status,
-        customerName: readText(order.customerName),
-        customerPhone: readText(order.customerPhone),
-        customerAddress: readText(order.customerAddress) || readText(order.destination) || 'صنعاء، اليمن',
-        weight: readNumber(order.totalWeight),
-        cbm: readNumber(order.totalCBM),
-        shippingCompany: readText(order.shippingCompany),
-        amountPaid: readNumber(order.amountPaid),
-        amountRemaining: readNumber(order.amountRemaining),
-        totalCostYER: readNumber(order.totalCostYER),
-        currency: readText(order.currency) || readText(detail.data.currency) || 'YER',
-        products: readArray(order.items),
-        history: readArray(order.history),
+      const orderId = readText(match.orderId);
+      const detail = await client.get<{ success: true; data: ApiRow }>(`/api/v1/orders/${encodeURIComponent(orderId)}`);
+      const orderNumber = readText(detail.data.orderNumber);
+      // الخط الزمني من سجل الطلبات المسطّح بدل مصفوفة history داخل الحمولة.
+      // The timeline comes from the flat order history, not a history array inside a payload.
+      const historyEvents = await orderHistoryService.listForContext({
+        entityType: 'order',
+        orderId,
+        orderNumber,
+        label: orderNumber || publicId,
       });
+      const profile = readOrderTrackingRow(detail.data, publicId, historyEvents);
+      setTrackingData(profile);
       setResolvedSource('orders_db');
-      setGpsLocation(readText(order.locationYemen) || 'مستودع الفرز والتبريد');
-      setStatusSelector(status);
+      setGpsLocation(profile.locationYemen);
+      setStatusSelector(profile.status);
       return true;
     } catch (error) {
       console.error('[TrackingPage] order lookup failed:', error);
@@ -369,29 +326,11 @@ export default function TrackingPage() {
     try {
       const publicId = (trackingData.trackingNumber || trackingData.orderNumber).toUpperCase();
 
+      // مفاتيح مسطّحة مطابقة لأعمدة public_tracking؛ الموقع يُرسل محدّثًا لأن اللوحة قد غيّرته.
+      // Flat keys matching the public_tracking columns; the location is sent fresh because the panel may have edited it.
       await client.requestWithBodyForGateway('PUT', profilePath(publicId), {
-        orderNumber: trackingData.orderNumber || '',
-        status: trackingData.status,
+        ...trackingProfileWritePayload(trackingData),
         locationYemen: gpsLocation,
-        data: {
-          trackingNumber: publicId,
-          orderNumber: trackingData.orderNumber || '',
-          status: trackingData.status,
-          customerName: trackingData.customerName || '',
-          customerPhone: trackingData.customerPhone || '',
-          customerAddress: trackingData.customerAddress || '',
-          weight: trackingData.weight || 0,
-          cbm: trackingData.cbm || 0,
-          shippingCompany: trackingData.shippingCompany || '',
-          amountPaid: trackingData.amountPaid || 0,
-          amountRemaining: trackingData.amountRemaining || 0,
-          totalCostYER: trackingData.totalCostYER || 0,
-          currency: trackingData.currency || 'YER',
-          products: trackingData.products || [],
-          history: trackingData.history || [],
-          locationYemen: gpsLocation,
-          updatedAt: Date.now()
-        }
       });
       setResolvedSource('public'); // Switch search reference so updates sync directly
       setSuccessMsg(isAr ? 'تم نشر وتفعيل واجهة التتبع العامة للعميل بنجاح!' : 'Successfully published tracking portal for Client!');
@@ -429,15 +368,11 @@ export default function TrackingPage() {
 
       // Persist directly based on where we loaded from
       if (resolvedSource === 'public') {
+        // الملف العام لا يحفظ الأحداث: الحالة والموقع عمودان مسطّحان، والخط الزمني يُقرأ من سجل الطلبات.
+        // The public profile stores no events: status and location are flat columns, the log is read from order history.
         await client.patch(profilePath(trackingData.trackingNumber), {
           status: statusSelector,
           locationYemen: gpsLocation,
-          data: {
-            status: statusSelector,
-            locationYemen: gpsLocation,
-            history: revisedHistory,
-            updatedAt: Date.now()
-          }
         });
       } else if (resolvedSource === 'orders_db') {
         await client.patch(`/api/v1/orders/${encodeURIComponent(trackingData.id)}/status`, {
@@ -478,13 +413,11 @@ export default function TrackingPage() {
       setTrackingData(updatedData);
 
       if (resolvedSource === 'public') {
+        // إعادة التهيئة تمسح الخط الزمني محليًا فقط؛ أحداث الطلب تبقى في orders_history بأعمدتها المسطّحة.
+        // Resetting clears the timeline locally only; order history events stay in orders_history's flat columns.
         await client.patch(profilePath(trackingData.trackingNumber), {
           status: 'تم تسجيل الطلب',
-          data: {
-            history: initialHistory,
-            status: 'تم تسجيل الطلب',
-            updatedAt: Date.now()
-          }
+          locationYemen: gpsLocation,
         });
       } else if (resolvedSource === 'orders_db') {
         await client.patch(`/api/v1/orders/${encodeURIComponent(trackingData.id)}/status`, {

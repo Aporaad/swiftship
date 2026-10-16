@@ -1,5 +1,5 @@
 import type { OrderStatusItem } from '../hooks/useOrderStatuses';
-import type { OrderHistoryEvent } from './orderHistoryService';
+import { historyChangesAsRecord, type OrderHistoryEvent } from './orderHistoryService';
 
 export type StatusTransitionPlan = {
   allowed: boolean;
@@ -10,8 +10,10 @@ export type StatusTransitionPlan = {
 
 function statusIdFromEvent(event: OrderHistoryEvent): number | null {
   if (event.eventType !== 'order.status_changed' && event.eventType !== 'order.created') return null;
-  const after = event.afterData ?? {};
-  const raw = after.order_status_id ?? after.orderStatusId ?? after.orderStatus;
+  // معرّف المرحلة يُقرأ من صفوف التغيير بعد إسقاط لقطة afterData؛ أسماء الحقول موحّدة إلى camelCase.
+  // The stage id now comes from the flat change rows (afterData is gone); field names are normalised to camelCase.
+  const after = historyChangesAsRecord(event, 'newValue');
+  const raw = after.orderStatusId ?? after.orderStatus;
   const id = Number(raw);
   return Number.isInteger(id) && id > 0 ? id : null;
 }

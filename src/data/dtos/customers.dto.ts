@@ -125,15 +125,15 @@ export interface CustomersDatabaseRow {
   name_ar: string | null;
   name_en: string | null;
   customer_level: string | null;
-  // ========= الحقول المستخرجة من data JSONB (migration 20261002023000) =========
+  // ========= الأعمدة المسطّحة الحقيقية في customers بعد إسقاط حمولة jsonb =========
   /** مصدر الاكتساب */
   acquisition_source: string | null;
-  /** الفئات المفضلة */
+  /** الفئات المفضلة: نص مصفوفي text[] بدل jsonb (migration 0038) */
   preferred_categories: string[] | null;
-  /** تفاصيل الجسم */
-  body_details: Record<string, unknown> | null;
-  /** موقع جغرافي */
-  location: Record<string, unknown> | null;
+  /**
+   * body_details و location لم يعودا عمودين في customers؛ تفاصيل الجسم والنصوص الجغرافية تعيش في cust_details.
+   * body_details and location are no longer customers columns; body details and location text live in cust_details.
+   */
   /** العنوان */
   address: string | null;
   // ===========================================================================

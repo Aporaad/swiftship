@@ -25,8 +25,10 @@ describe('orderLifecycleService', () => {
 
   it('يتعرف على المراحل المنفذة من أحداث الإنشاء وتغيير الحالة المسجلة', () => {
     const processed = getProcessedStatusIds([
-      { id: 'created', eventType: 'order.created', afterData: { order_status_id: '1' }, eventCategory: 'order', operation: 'insert', entityType: 'order' },
-      { id: 'changed', eventType: 'order.status_changed', afterData: { orderStatusId: 3 }, eventCategory: 'order', operation: 'update', entityType: 'order' },
+      { id: 'created', eventType: 'order.created', changedFields: ['order_status_id'], changes: [{ fieldName: 'order_status_id', oldValue: null, newValue: '1' }], eventCategory: 'order', operation: 'insert', entityType: 'order' },
+      { id: 'changed', eventType: 'order.status_changed', changedFields: ['orderStatusId'], changes: [{ fieldName: 'orderStatusId', oldValue: '2', newValue: 3 }], eventCategory: 'order', operation: 'update', entityType: 'order' },
+      // الحدث بلا صفوف تغيير لا يضيف مرحلة — an event without change rows contributes no stage.
+      { id: 'empty', eventType: 'order.status_changed', changedFields: [], changes: [], eventCategory: 'order', operation: 'update', entityType: 'order' },
     ]);
     expect([...processed]).toEqual([1, 3]);
   });

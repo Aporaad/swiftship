@@ -39,10 +39,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+/**
+ * ملفات المستخدمين أعمدة مسطّحة حقيقية (full_name/system_pin/…)، فلا يُفكّ أي غلاف payload هنا.
+ * User profiles are flat first-class columns (full_name/system_pin/...), so no payload wrapper is unwrapped.
+ * تستدعي الطبقات العلوية snapshot.data() من وثيقة المحلي — وهذا يبقى لأن ليس عمود في قاعدة البيانات.
+ * Callers still use snapshot.data() from the local document shim; that is not a database column.
+ */
 function profileRecord(value: unknown): Record<string, unknown> | null {
-  if (!isRecord(value)) return null;
-  const nested = value.data;
-  return isRecord(nested) ? { ...value, ...nested } : value;
+  return isRecord(value) ? value : null;
 }
 
 function readText(record: Record<string, unknown>, ...keys: string[]): string | null {
