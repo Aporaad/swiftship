@@ -175,7 +175,8 @@ class FinancialAccountService {
         if (byCode) return byCode;
       }
 
-      // خريطة ترحيل المعرفات — account_id_migration_map through the API.
+      // الحساب الحديث الذي حلّ محل القديم: أعمدة accounts الحقيقية، لا خرائط ترحيل.
+      // The modern account that superseded this one: real accounts columns, no migration map.
       const mapping = await readFinanceRecord(
         `/api/v1/finance/account-id-map?oldAccountId=${encodeURIComponent(id)}`,
       );

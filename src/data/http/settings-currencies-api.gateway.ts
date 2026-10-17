@@ -54,7 +54,9 @@ export const settingsCurrenciesApiGateway = {
     const response = await client.get<ApiEnvelope<Record<string, unknown>>>('/api/v1/settings/brand');
     return response.data ?? {};
   },
-  async getSettings(category: 'general' | 'logistics' | 'whatsapp'): Promise<SettingsApiDto> {
+  // فئة إعدادات واحدة = جدول بأعمدة حقيقية خلف /api/v1/settings/{category}.
+  // One settings category = one real-column table behind /api/v1/settings/{category}.
+  async getSettings(category: 'general' | 'logistics' | 'whatsapp' | 'print_template'): Promise<SettingsApiDto> {
     const response = await client.get<ApiEnvelope<SettingsApiDto>>(`/api/v1/settings/${category}`);
     return response.data;
   },

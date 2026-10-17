@@ -320,14 +320,15 @@ export function DashboardMapAndActivity({ isAr, navigate, mapCouriers, selectedC
               <Clock className="w-4 h-4 text-[#d4af37]" />
               {isAr ? 'آخر النشاطات اللوجستية' : 'Live Timeline Logs'}
             </h3>
-            <Link to="/orders" className="text-[9px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2.5 py-1 rounded-lg border border-[#d4af37]/15 hover:bg-[#d4af37]/15 transition duration-300">
-              {isAr ? 'عرض الكل' : 'View Ledger'}
+            {/* زر عرض الكل يوجه إلى شاشة سجل النشاط في قسم المستخدمين والأدوار — View All redirects to activity log in Users & Roles */}
+            <Link to="/user-management?tab=activity" className="text-[9px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2.5 py-1 rounded-lg border border-[#d4af37]/15 hover:bg-[#d4af37]/15 transition duration-300">
+              {isAr ? 'عرض الكل' : 'View All'}
             </Link>
           </div>
 
-          {/* Activities vertical list */}
+          {/* Activities vertical list - يعرض آخر 10 سجلات نشاط فقط — displays latest 10 activities only */}
           <div className="flex-1 space-y-4 flex flex-col justify-center">
-            {recentActivities.map((act) => {
+            {recentActivities.slice(0, 10).map((act) => {
               const Icon = act.icon;
               return (
                 <div key={act.id} className="flex gap-3 text-start items-start group min-w-0">

@@ -2622,3 +2622,65 @@
   - `close_flattening_gaps_0038` (`20261016230038`)
   - `drop_legacy_jsonb_payloads_0034` (`20261016231434`)
 - [x] تأكيد ظهور جميع الترحيلات بنصوصها الكاملة وتواريخها في لوحة تحكم Supabase تحت قائمة Database Migrations.
+
+## [2026-10-17 01:10 +03:00] — Qoder
+- [x] تأكيد تنفيذ 0038 و 0034: `public_jsonb = 0` — كل الحقول أصبحت أعمدة رئيسية، وصفر حمولة jsonb في `public`.
+- [x] تدقيق تبريري لكل جدول موضع سؤال (75 جدولًا في `public` + 22 في `alx_api_private`) مع مصدر الإنشاء ومستدعيات الكود.
+- [ ] P1 REQUIRED — إصلاح `reporting.repository.ts:74`: إزالة `data, filters` من قائمة الاختيار وقراءة الأعمدة المسطّحة البديلة (`active_report`, `search_term`, `selected_*`, `sort_by`, `sort_order`).
+- [ ] P1 REQUIRED — إصلاح `public.require_financial_permission`: استعادة فحص الصلاحية ومنع الـ fallback الذي يختار مستخدم Admin عشوائيًا.
+- [ ] P1 — إضافة اختبار تعاقد مخطط (schema-contract) يقارن كل مرجود عمود في SQL الخام مع `information_schema` الحيّ، لمنع تكرار فئة خطأ الإسقاط.
+- [ ] P2 — توحيد RBAC في `alx_api_private` (roles/permissions/user_roles/role_permissions) ونقل اعتماد `require_financial_entry_settings_permission` إليها، ثم إسقاط `public.roles` و `public.role_permission`.
+- [ ] P2 — نقل `public.sessions` (3 صفوف) إلى `alx_api_private` أو أرشفتها ثم إسقاطها بعد تحديث `src/data/current-supabase/gateways/auth.gateway.ts`.
+- [ ] P3 — مصدر واحد للعملات: ترحيل 3 صفوف `settings_custom_currency` إلى `currency` + `cur_price` ثم إسقاط الجدول المكرر.
+- [ ] P3 — مصدر واحد لأسعار صرف التقارير: حذف `report_exchange_rate` (فارغة بلا مستدعٍ) والاعتماد على `cur_price`.
+- [ ] P4 — توحيد جداول `settings_*`: إسقاط القشرة `public.settings` (0 صف)، وحذف أو ربط الجداول الأربعة المعزولة (`settings_print_template`, `settings_report_account`, `settings_dashboard`, `settings_dashboard_metric`).
+- [ ] P4 — واتساب: قرار واحد بين `whatsapp_logs` (19 صفًا قديمًا،الكود الجديد لا يكتبها) و `alx_api_private.notification_outbox`.
+- [ ] P5 — حذف الجداول الإنشائية الفارغة `public_tracking_event` و `public_tracking_product` (صفر مستدعٍ) أو تنفيذ الميزة.
+- [ ] P6 — أرشفة خرائط الترحيل غير المستخدمة (`portal_user_migration_map`, `financial_legacy_migration_map`, `financial_migration_exceptions`) والإبقاء على `account_id_migration_map` حتى يُستبدل اعتمادهودفي `finance.repository.ts:667` بعمود حقيقي.
+- [ ] P7 — سجل رسمى للجداول (table registry) يوثّق غرض كل جدول وملّاكه في الكود، بمنع إنشاء جدول بلا مستدعٍ.
+- [ ] REQUIRED قبل أي DDL: موافقة المالك على المرحلة والنطاق — لم يُنفَّذ أي تعديل في هذه الجولة.
+
+## [2026-10-17 01:54:00 +03:00] — تقييد سجلات آخر النشاطات اللوجستية باللوحة وربط زر عرض الكل — AI Model: Gemini 3.8 Flash (Medium)
+- [x] تحليل مكونات لوحة التحكم وعرض "آخر النشاطات اللوجستية" (DashboardWidgets / Activity Logs).
+- [x] ضبط عرض النشاطات باللوحة ليقتصر على آخر 10 سجلات فقط (`slice(0, 10)` واستعلام API و Gateway محدد بـ `limit: 10` مع الترتيب التنازلي).
+- [x] تفعيل زر "عرض الكل" وتوجيه المستخدم إلى شاشة سجل النشاط في قسم المستخدمين والأدوار (`/user-management?tab=activity`).
+- [x] ربط وتضمين مكون `UserActivityLogsTab` داخل تبويب سجل النشاط في `UserManagementTabContent` ودعم عرض كافة السجلات وفلاتر البحث والموظف والنوع.
+- [x] إجراء الفحص والتحقق (`tsc --noEmit` بنجاح 0 errors، واختبارات النظام 92/92 passed، 405/405 tests).
+- [x] توثيق التعديلات في `devloping_history.md` وتحديث `todo.md`.
+
+
+
+---
+
+## [2026-10-17 03:20:00 +03:00] — جولة P1–P7 بعد التدقيق الشامل (AI Model: Qoder Agent)
+
+- [x] **P1** إصلاح قراءة `report_templates` في `reporting.repository.ts` (كانت تختار `data, filters` المسقطين ⇒ فشل وقت التشغيل).
+- [x] **P1** ربط العملات وأسعار الصرف بالمصدر المعتمد `public.currency` + `public.cur_price` للقراءة والكتابة، بدل `settings_custom_currency`.
+- [x] **P1** ترحيل 0039: حارس صلاحيات مالية حقيقي (`alx_api_private.user_has_permission`) برفض افتراضي وبلا استثناء للمدير + سياسات إتاحة قراءة للمالك حتى تعدّ اللوحة الصفوف الحقيقية.
+- [x] **P1** تمرير معرّف المنفّذ إلى كل دوال RPC المالية عبر `withActorClaims` (كانت تُنفَّذ بلا هوية مستخدم).
+- [x] **P1** اختبار تعاقد ذاتي التحديث `tests/unit/db/dropped-column-contract.test.ts`: يرفض أي كود يشير إلى عمود مسقوط.
+- [x] **P2** ترحيل 0040: توحيد RBAC داخل `alx_api_private` (تسجيل الأكواد القديمة + منح الأدوار + أدوار المستخدمين) ثم إسقاط `public.roles`/`public.role_permission`/`public.sessions`.
+- [x] **P2** إعادة ربط بوّابات الواجهة الانتقالية: `roles.gateway.ts` و`auth.gateway.ts` صارتا تستدعيان `/api/v1/roles` و`/api/v1/auth/sessions` بدل الجداول المسقطة.
+- [x] **P3+P4** ترحيل 0042: دمج ثم إسقاط المكرر واليتيم (`settings_custom_currency`, `settings_report_account`, `report_settings`, `report_exchange_rate`, `report_template_filter`, `settings_dashboard`+`_metric`, `public_tracking_product`, `public_tracking_event`, قشرة `public.settings`) مع حارس «لا تُسقط مع بيانات ضائعة» وحارس «لا jsonb في public».
+- [x] **P5** ترحيل 0041 + كود: قالب الطباعة صار شاشة/API (`/api/v1/settings/print_template`) بدل `localStorage`، مع أعمدة تدقيق `created_at/created_by/updated_by`.
+- [x] **P6** ترحيل 0043: `accounts.superseded_by_account_id` + `superseded_at` بدل `account_id_migration_map`، وإسقاط خرائط الترحيل الأربع ودالة `rewrite_account_reference_jsonb`؛ المسار `/api/v1/finance/account-id-map` بقي اسمه وتغيّر مصدره.
+- [x] **P7** `docs/table-registry.md`: تبرير كل جدول وكل حقل متنازع عليه، وتصحيح قياس الصفوف الخاطئ.
+- [x] **P7** حذف ملفات الفحص المؤقتة (`alx_api/vprobe*.cjs`).
+- [x] **التحقق**: `alx_api` — `tsc --noEmit` نظيف و43 suite / 391 test ناجحة. الواجهة — `tsc --noEmit` نظيف و92 ملف / 405 اختبار ناجح (2 skipped).
+- [ ] **بانتظار المالك فقط**: تطبيق DDL للترحيلات 0039 ← 0040 ← 0041 ← 0042 ← 0043 من لوحة Supabase بحساب `postgres`، ثم نشر كود الـ API.
+- [ ] **قرار مفتوح للمالك**: `report_templates.active_report` عمود منطقي ولا يحمل نوع التقرير؛ هل يحتاج ترحيلًا مستقلًا ليصير نص نوع التقرير؟
+
+
+---
+
+## [2026-10-17 04:08:00 +03:00] — اكتمال ترحيل قاعدة البيانات بنجاح (AI Model: Gemini 3.8 Flash (Medium))
+- [x] مراجعة سجل الجلسة السابقة `docs/old/استكمال_التحول_لنظام_API-only_(fork)_2026-10-17_03-31.md` وتحديد المتطلبات المتبقية لترحيل قاعدة البيانات.
+- [x] تنفيذ وتطبيق ترحيل 0039 (`0039_fix_runtime_access_and_financial_guard.sql`) على Supabase: حارس الصلاحيات الموحد وسياسات RLS للقراءة والتشغيل.
+- [x] تنفيذ وتطبيق ترحيل 0040 (`0040_unify_rbac_in_alx_api_private.sql`) على Supabase: توحيد RBAC وإسقاط جداول `public.roles` و`public.role_permission` و`public.sessions`.
+- [x] تنفيذ وتطبيق ترحيل 0041 (`0041_print_template_source_of_truth.sql`) على Supabase: تثبيت جدول قالب الطباعة كالمصدر المعتمد للنظام.
+- [x] تنفيذ وتطبيق ترحيل 0042 (`0042_drop_duplicate_and_orphan_tables.sql`) على Supabase: دمج العملات واللوحة وإسقاط الجداول المكررة واليتيمة العشرة والتحقق من عدم وجود أي حقل `jsonb` في `public`.
+- [x] تنفيذ وتطبيق ترحيل 0043 (`0043_replace_migration_maps_with_real_columns.sql`) على Supabase: ربط الحسابات البديلة بالأعمدة الرئيسية وإسقاط دوال وخرائط الترحيل السابقة.
+- [x] تسجيل الترحيلات في جدول `supabase_migrations.schema_migrations`.
+- [x] التحقق الميداني المباشر من قاعدة البيانات: 5 عملات معتمدة، 11 سعر صرف، 2 قالب تقارير، 0 جداول مكررة أو يتيمة متبقية، 0 حقول `jsonb` في `public`.
+- [x] فحص واختبارات `alx_api`: اجتياز `tsc --noEmit` بنجاح (0 errors) ونجاح 43 suite / 391 test بنسبة 100%.
+- [x] فحص واختبارات الواجهة: اجتياز `tsc --noEmit` بنجاح (0 errors).

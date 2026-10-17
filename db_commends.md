@@ -4871,3 +4871,485 @@ $SQL$]::text[],
             statements = EXCLUDED.statements,
             created_by = EXCLUDED.created_by;
 ```
+
+## [2026-10-17 01:00 +03:00] — Qoder
+كل ما نُفِّذ في هذه الجولة استعلامات قراءة فقط عبر `pg` بموصل `alx_api_runtime` من مسبارات مؤقتة حُذفت بعد الاستخدام. لا DDL، لا UPDATE، لا DELETE.
+
+**1) تأكيد تنفيذ 0038 و 0034**
+```sql
+select table_name, column_name from information_schema.columns
+ where table_schema='public' and (
+   (table_name='cust_details' and column_name in ('latitude','longitude','street','governorate','address_details','address',
+                                                  'coat_size','pants_size','shorts_size','shoe_size','height_cm','weight_kg','preferred_colors')) or
+   (table_name='portal_users' and column_name in ('linked_acc_id','linked_courier_id','linked_source_id')) or
+   (table_name='orders' and column_name='package_type') or
+   (table_name='salary_history' and column_name='created_by_uid') or
+   (table_name='settings_general' and column_name in ('timezone','auto_notification','cbm_shipping_rate')) or
+   (table_name='user_settings' and column_name in ('sidebar_collapsed','sidebar_items')) or
+   (table_name='items_category' and column_name in ('group_name','requires_hazard_review','requires_high_value_review')))
+ order by 1,2;
+-- النتيجة: 26 صفًا — كل أعمدة 0038 موجودة ⇒ 0038 نُفِّذت بالكامل
+
+select n.nspname, p.proname, pg_get_function_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+ where p.proname in ('safe_jsonb','validate_order_party');
+-- النتيجة: alx_api_private.safe_jsonb(p_value text) موجودة، و public.validate_order_party موجودة
+
+select position('NEW.data' in pg_get_functiondef(p.oid)) as new_data_pos from pg_proc p
+ join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='validate_order_party';
+-- النتيجة: 0 ⇒ الدالة الجديدة لم تعد تكتب الحمولة
+
+select (select count(*)::int from information_schema.columns where table_schema='public'
+          and data_type in ('jsonb','json')) as public_jsonb,
+        (select count(*)::int from information_schema.columns where table_schema='alx_api_private'
+          and data_type in ('jsonb','json')) as private_jsonb;
+-- النتيجة: public_jsonb=0  ⇒ 0034 نُفِّذ و حُذف كل payload من public
+--          private_jsonb=3 ⇒ auth_events.metadata، portal_auth_events.metadata، operation_idempotency.response_data
+
+select table_name, string_agg(column_name, ', ' order by column_name) as cols
+ from information_schema.columns where table_schema='public' and data_type in ('jsonb','json') group by 1;
+-- النتيجة: (none)
+```
+
+**2) الجداول الابنة بعد الإسقاط (لم تفقد بيانات)**
+```sql
+select (select count(*)::int from public.orders_history)              as history_rows,      -- 13
+       (select count(*)::int from public.orders_history_change)       as change_rows,       -- 574 (كانت 0 قبل 0038 §5)
+       (select count(*)::int from public.role_permission)             as role_permission,   -- 185
+       (select count(*)::int from public.activity_log_detail)         as activity_detail,   -- 84
+       (select count(*)::int from public.notification_recipient)      as notif_recipient,   -- 0
+       (select count(*)::int from public.portal_ticket_reply)         as ticket_reply,      -- 2
+       (select count(*)::int from public.order_fired_trigger)         as fired_trigger,     -- 2
+       (select count(*)::int from public.asset_maintenance_log)       as asset_log;         -- 0
+```
+
+**3) جرد الجداول موضع النقاش (عدد الصفوف الحقيقي)**
+```sql
+-- 75 جدولًا في public، 22 جدولًا في alx_api_private
+select table_type, count(*)::int from information_schema.tables where table_schema='public' group by 1;
+select table_schema, count(*)::int from information_schema.tables
+ where table_schema in ('public','alx_api_private') and table_name = ANY(:t) group by 1;
+-- roles: alx_api_private=4 | public=7          role_permission: public=185، alx_api_private.role_permissions=198
+-- permissions: 159 | user_roles: 8             sessions: public=3 | api_sessions=72
+-- account_id_migration_map=89  portal_user_migration_map=7
+-- financial_legacy_migration_map=247  financial_migration_exceptions=111
+-- activity_logs=29 (detail=84)  notifications=201 (recipient=0)  portal_tickets=2 (reply=2)
+-- assets=1 (maintenance_log=0)  orders_history=13 (change=574)
+-- public_tracking=0  public_tracking_event=0  public_tracking_product=0
+-- report_settings=0  report_templates=0  report_template_filter=0  report_exchange_rate=0
+-- currency=0  cur_price=0  settings_custom_currency=3
+-- whatsapp_logs=19  settings_whatsapp=1  settings_whatsapp_template=3  settings_whatsapp_trigger=3
+-- settings=0  settings_general=1  settings_dashboard=2  settings_dashboard_metric=16
+-- settings_backup_collection=6  settings_logistics=2  settings_print_template=1
+-- settings_report_account=4  expense_category=13  user_settings=4
+```
+
+**4) مطابقة ما يقرأه الكود مع الأعمدة الحيّة**
+```sql
+select column_name from information_schema.columns where table_schema='public' and table_name='report_templates';
+-- report_template_id, created_by, created_at, updated_at, updated_by, active_report, name_ar, name_en,
+-- search_term, selected_company_id, selected_courier_id, selected_customer_id, selected_expense_category,
+-- selected_user_id, sort_by, sort_order           ⇒ لا data ولا filters (أُسقطا في 0034)
+select column_name from information_schema.columns where table_schema='public' and table_name='customers';
+-- preferred_categories موجود، location و body_details غائبان (أُسقطا)
+select column_name from information_schema.columns where table_schema='public' and table_name='cust_details';
+-- 35 عمودًا: address/latitude/longitude/street/governorate/address_details/coat_size/preferred_colors موجودة
+-- body_details و location غائبان  ⇒ النقل تم ثم الإسقاط
+select column_name from information_schema.columns where table_schema='public' and table_name='settings';
+-- 5 أعمدة فقط، بلا data و بلا category ⇒ قشرة فارغة (0 صف)
+```
+
+**5) التبعيات: من يعتمد على الجداول المرشّحة للنقل أو الحذف؟**
+```sql
+with cand as (select n.nspname as sch, p.proname as name, pg_get_functiondef(p.oid) as def
+   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname in ('public','alx_api_private') and p.prokind='f')
+ select name, (def ilike '%public.roles%') as uses_public_roles, (def ilike '%role_permission%') as uses_role_permission,
+        (def ilike '%account_id_migration_map%') as uses_acct_map
+   from cand  where def ilike '%public.roles%' or def ilike '%role_permission%'
+        or def ilike '%public.sessions%' or def ilike '%account_id_migration_map%' or def ilike '%from public.settings%';
+-- require_financial_entry_settings_permission → يقرأ public.role_permission (الاعتماد الوحيد)
+-- rewrite_account_reference_jsonb            → يقرأ public.account_id_migration_map
+
+select rel.relname, count(*)::int as triggers from pg_trigger t
+ join pg_class rel on rel.oid=t.tgrelid join pg_namespace n on n.oid=rel.relnamespace
+ where n.nspname='public' and not t.tgisinternal and rel.relname in (:questioned) group by 1;
+-- financial_migration_exceptions فقط (محفّظ واحد)
+
+select tc.table_name, kcu.column_name, ccu.table_name as to_table from information_schema.table_constraints tc
+ join information_schema.key_column_usage kcu on kcu.constraint_name=tc.constraint_name
+ join information_schema.constraint_column_usage ccu on ccu.constraint_name=tc.constraint_name
+ where tc.constraint_type='FOREIGN KEY' and ccu.table_schema='public' and ccu.table_name in ('roles','settings','sessions');
+-- النتيجة: (none) ⇒ لا مفتاح أجنبي يشير إلى public.roles أو public.settings أو public.sessions
+
+select table_name, privilege_type from information_schema.role_table_grants
+ where grantee='alx_api_runtime' and table_schema='public'
+   and table_name in ('roles','role_permission','sessions','settings','report_templates') order by 1,2;
+-- صلاحيات DML كاملة على الكل ⇒ الإسقاط يتطلب DDL من حساب postgres (لوحة Supabase)
+
+select table_name from information_schema.views where table_schema='public';
+-- (none) ⇒ لا منظرات متبقية
+select count(*)::int as rls_tables from pg_class c join pg_namespace n on n.oid=c.relnamespace
+ where n.nspname='public' and c.relkind='r' and c.relrowsecurity;
+-- 6 جداول فقط مفعّل عليها RLS في public
+
+select t.table_name from information_schema.tables t where t.table_schema='public'
+  and left(t.table_name,9)='settings_' and not exists (
+     select 1 from information_schema.table_constraints c where c.table_schema='public'
+       and c.table_name=t.table_name and c.constraint_type='FOREIGN KEY') order by 1;
+-- 10 جداول settings_* بلا أي مفتاح أجنبي (ترتبط بأبيها بنص settings_key فقط)
+```
+
+**6) مصدر currencies وأين تعيش فعليًا**
+```sql
+select (select count(*)::int from public.currency) as currency_rows,       -- 0
+       (select count(*)::int from public.settings_custom_currency) as scc,  -- 3
+       (select count(*)::int from public.cur_price) as cur_price_rows,      -- 0
+       (select count(*)::int from public.report_exchange_rate) as rer;      -- 0
+select settings_key, code, name, symbol, rate_to_yer from public.settings_custom_currency order by 2;
+-- general/SAR/ريال سعودي/ر.س/140، general/USD/دولار أمريكي/$/535، general/YER/ريال يمني/ر.ي/1
+select o.order_currency_code, count(*)::int as orders,
+       (select count(*)::int from public.currency c where lower(c.code)=lower(o.order_currency_code)) as matches_currency
+  from public.orders o where o.order_currency_code is not null group by 1 order by 2 desc;
+-- SAR في طلبين، و matches_currency=0 ⇒ لا مرجع لعملة الطلبات في الجدول المعتمد
+```
+
+---
+
+## [2026-10-17 03:30:00 +03:00] — ترحيلات 0039–0043 مُؤلَّفة ومعروضة، ولا SQL نُفِّذ في هذه الجولة (AI Model: Qoder Agent)
+
+**الحالة الصريحة / Explicit status:** لم يُشغَّل أي SQL مجدِّول أو معدِّل في قاعدة البيانات في هذه الجولة. حساب `alx_api_runtime` للتشغيل فقط (DML) ولا يملك DDL، ولوحة Supabase بحساب `postgres` هي حق المالك وحدها. ما يلي هو نص ما سيُنفَّذ، مُسجَّلًا هنا قبل التطبيق وبنفس ترتيبه.
+
+**الملفات المعروضة للتطبيق بالترتيب (كل ملف في جلسة واحدة):**
+1. `alx_api/src/db/migrations/0039_fix_runtime_access_and_financial_guard.sql`
+   - `CREATE OR REPLACE FUNCTION alx_api_private.user_has_permission(p_user_id text, p_permission text) RETURNS boolean … SECURITY DEFINER`
+   - `CREATE OR REPLACE FUNCTION public.require_financial_permission(p_permission text, p_fallback_uid text) …` (رفض بلا جلسة موثقة، رفض للحساب المعطل، رفض عند غياب الرمز، ولا رجوع للمدير)
+   - `CREATE OR REPLACE FUNCTION public.require_financial_entry_settings_permission(p_permission text) …`
+   - `CREATE POLICY owner_roles_select / owner_permissions_select / owner_user_roles_select / owner_role_permissions_select … FOR SELECT TO postgres USING (true)`
+   - `GRANT SELECT, INSERT, UPDATE ON TABLE public.currency, public.cur_price TO alx_api_runtime;` + `GRANT SELECT ON TABLE public.report_templates TO alx_api_runtime;`
+   - `CREATE POLICY owner_currency_all / owner_cur_price_all (FOR ALL TO postgres)` و`owner_report_templates_select`
+2. `0040_unify_rbac_in_alx_api_private.sql` — تسجيل أكواد `public.role_permission` في `alx_api_private.permissions`، منح الأدوار، `user_roles` من `users.role`، ثم `DROP TABLE IF EXISTS public.role_permission; public.roles; public.sessions;`
+3. `0041_print_template_source_of_truth.sql` — `ALTER TABLE public.settings_print_template ADD COLUMN IF NOT EXISTS created_at/created_by/updated_by …` + صف `print_template`
+4. `0042_drop_duplicate_and_orphan_tables.sql` — دمج العملات في `currency`/`cur_price` ودمج اللوحة في `user_settings`، ثم إسقاط: `settings_custom_currency`, `settings_report_account`, `settings_dashboard_metric`, `settings_dashboard`, `report_template_filter`, `report_exchange_rate`, `report_settings`, `public_tracking_product`, `public_tracking_event`, `settings`
+5. `0043_replace_migration_maps_with_real_columns.sql` — `ALTER TABLE public.accounts ADD COLUMN IF NOT EXISTS superseded_by_account_id text, superseded_at timestamptz;` + FK + نقل خرائط `account_id_migration_map` ثم `DROP FUNCTION rewrite_account_reference_jsonb` وإسقاط: `account_id_migration_map`, `financial_legacy_migration_map`, `financial_migration_exceptions`, `portal_user_migration_map`
+
+**استعلامات التحقق بعد التطبيق (تُشغَّل في اللوحة بحساب `postgres`):**
+```sql
+select count(*) from public.currency;                                   -- 5 لا صفر
+select count(*) from public.cur_price;                                  -- 13 لا صفر
+select count(*) from public.report_templates;                           -- 2 لا صفر
+select r.code, count(rp.permission_id)::int as grants
+  from alx_api_private.roles r left join alx_api_private.role_permissions rp using (role_id)
+ group by 1 order by 1;                                                 -- لا دور بلا صلاحية
+select count(*) from public.accounts where superseded_by_account_id is not null;
+select table_name from information_schema.tables where table_schema='public'
+  and table_name in ('roles','role_permission','sessions','settings','settings_custom_currency',
+                     'settings_report_account','settings_dashboard','settings_dashboard_metric',
+                     'report_settings','report_exchange_rate','report_template_filter',
+                     'public_tracking_product','public_tracking_event','account_id_migration_map',
+                     'financial_legacy_migration_map','financial_migration_exceptions',
+                     'portal_user_migration_map');                       -- صفر صفوف بعد 0043
+select c.relname || '.' || a.attname as jsonb_left
+  from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_type t on t.oid=a.atttypid
+ where c.relnamespace='public'::regnamespace and c.relkind='r' and a.attnum>0
+   and not a.attisdropped and t.typname in ('json','jsonb');            -- صفر صفوف
+```
+
+**ملاحظة قياس مُصحَّحة:** القياس السابق الذي قال `currency=0` و`cur_price=0` كان قراءة بحساب `postgres` تحت `FORCE ROW LEVEL SECURITY`؛ الصحيح 5 و13 (تفصيله في `DBdevloping_history.md` لنفس التاريخ).
+
+
+---
+
+## [2026-10-17 04:03:00 - 04:07:00 +03:00] — تطبيق ترحيلات 0039–0043 بنجاح عبر Supabase (AI Model: Gemini 3.8 Flash (Medium))
+
+**الحالة الصريحة / Explicit status:** تم تنفيذ وتطبيق جميع الترحيلات 0039 و0040 و0041 و0042 و0043 بنجاح تام على قاعدة بيانات الإنتاج عبر Supabase MCP، وتسجيلها في جدول `supabase_migrations.schema_migrations`، واجتياز كافة استعلامات وفحوصات التحقق الصارمة.
+
+### 1) ترحيل 0039: حارس الصلاحيات المالية وسياسات القراءة للعملات والقوالب
+```sql
+-- 0039_fix_runtime_access_and_financial_guard.sql
+CREATE OR REPLACE FUNCTION alx_api_private.user_has_permission(p_user_id text, p_permission text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SECURITY DEFINER
+ SET search_path TO 'alx_api_private', 'public'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+      FROM alx_api_private.user_roles ur
+      JOIN alx_api_private.role_permissions rp ON rp.role_id = ur.role_id
+      JOIN alx_api_private.permissions perm ON perm.permission_id = rp.permission_id
+      JOIN public.users u ON u.user_id = ur.user_id
+     WHERE ur.user_id = p_user_id
+       AND NOT COALESCE(u.disabled, false)
+       AND (ur.expires_at IS NULL OR ur.expires_at > now())
+       AND lower(perm.code) = lower(btrim(COALESCE(p_permission, '')))
+  );
+$function$;
+
+COMMENT ON FUNCTION alx_api_private.user_has_permission(text, text) IS
+  'التحقق من صلاحية مستخدم عبر RBAC الموحد: دور ساري + رمز موجود + حساب غير معطل. Unified per-user permission check.';
+
+DROP POLICY IF EXISTS owner_roles_select ON alx_api_private.roles;
+CREATE POLICY owner_roles_select ON alx_api_private.roles FOR SELECT TO postgres USING (true);
+DROP POLICY IF EXISTS owner_permissions_select ON alx_api_private.permissions;
+CREATE POLICY owner_permissions_select ON alx_api_private.permissions FOR SELECT TO postgres USING (true);
+DROP POLICY IF EXISTS owner_user_roles_select ON alx_api_private.user_roles;
+CREATE POLICY owner_user_roles_select ON alx_api_private.user_roles FOR SELECT TO postgres USING (true);
+DROP POLICY IF EXISTS owner_role_permissions_select ON alx_api_private.role_permissions;
+CREATE POLICY owner_role_permissions_select ON alx_api_private.role_permissions FOR SELECT TO postgres USING (true);
+
+CREATE OR REPLACE FUNCTION public.require_financial_permission(
+  p_permission text,
+  p_fallback_uid text DEFAULT NULL
+)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'alx_api_private', 'auth'
+AS $function$
+DECLARE
+  v_actor_id text := NULLIF(btrim(COALESCE(auth.uid()::text, '')), '');
+  v_fallback text := NULLIF(btrim(COALESCE(p_fallback_uid, '')), '');
+  v_disabled boolean;
+BEGIN
+  IF v_actor_id IS NULL THEN
+    v_actor_id := v_fallback;
+  END IF;
+
+  IF v_actor_id IS NULL THEN
+    RAISE EXCEPTION 'تتطلب العملية المالية جلسة مستخدم موثقة.';
+  END IF;
+
+  SELECT COALESCE(u.disabled, false) INTO v_disabled
+    FROM public.users u WHERE u.user_id = v_actor_id;
+  IF NOT FOUND OR v_disabled THEN
+    RAISE EXCEPTION 'حساب المستخدم غير صالح أو معطل.';
+  END IF;
+
+  IF NOT alx_api_private.user_has_permission(v_actor_id, p_permission) THEN
+    RAISE EXCEPTION 'لا تملك صلاحية % لهذه العملية المالية.', p_permission;
+  END IF;
+
+  RETURN v_actor_id;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.require_financial_entry_settings_permission(p_permission text)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'alx_api_private', 'auth'
+AS $function$
+DECLARE
+  v_actor_id text := NULLIF(btrim(COALESCE(auth.uid()::text, '')), '');
+  v_disabled boolean;
+BEGIN
+  IF v_actor_id IS NULL THEN
+    RAISE EXCEPTION 'تتطلب عملية إعدادات القيود جلسة مستخدم موثقة.';
+  END IF;
+
+  SELECT COALESCE(u.disabled, false) INTO v_disabled
+    FROM public.users u WHERE u.user_id = v_actor_id;
+  IF NOT FOUND OR v_disabled THEN
+    RAISE EXCEPTION 'حساب المستخدم غير صالح أو معطل.';
+  END IF;
+
+  IF NOT alx_api_private.user_has_permission(v_actor_id, p_permission) THEN
+    RAISE EXCEPTION 'لا تملك صلاحية % لإدارة إعدادات القيود.', p_permission;
+  END IF;
+
+  RETURN v_actor_id;
+END;
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.require_financial_permission(text, text) TO alx_api_runtime;
+GRANT EXECUTE ON FUNCTION public.require_financial_entry_settings_permission(text) TO alx_api_runtime;
+GRANT EXECUTE ON FUNCTION alx_api_private.user_has_permission(text, text) TO alx_api_runtime;
+REVOKE ALL ON FUNCTION alx_api_private.user_has_permission(text, text) FROM PUBLIC, anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE ON TABLE public.currency, public.cur_price TO alx_api_runtime;
+GRANT SELECT ON TABLE public.report_templates TO alx_api_runtime;
+
+DROP POLICY IF EXISTS api_runtime_currency_all ON public.currency;
+CREATE POLICY api_runtime_currency_all ON public.currency FOR ALL TO alx_api_runtime USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS api_runtime_cur_price_all ON public.cur_price;
+CREATE POLICY api_runtime_cur_price_all ON public.cur_price FOR ALL TO alx_api_runtime USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS api_runtime_report_templates_select ON public.report_templates;
+CREATE POLICY api_runtime_report_templates_select ON public.report_templates FOR SELECT TO alx_api_runtime USING (true);
+
+DROP POLICY IF EXISTS owner_currency_all ON public.currency;
+CREATE POLICY owner_currency_all ON public.currency FOR ALL TO postgres USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS owner_cur_price_all ON public.cur_price;
+CREATE POLICY owner_cur_price_all ON public.cur_price FOR ALL TO postgres USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS owner_report_templates_select ON public.report_templates;
+CREATE POLICY owner_report_templates_select ON public.report_templates FOR SELECT TO postgres USING (true);
+```
+
+### 2) ترحيل 0040: توحيد الصلاحيات RBAC داخل alx_api_private وإسقاط النسخ العامة
+```sql
+-- 0040_unify_rbac_in_alx_api_private.sql
+INSERT INTO alx_api_private.permissions (code, resource, action, description)
+SELECT DISTINCT lower(btrim(rp.permission_code)),
+       left(translate(lower(btrim(rp.permission_code)), '_', '-'), 63),
+       'legacy',
+       'code imported from public.role_permission by 0040 (RBAC unification)'
+  FROM public.role_permission rp
+ WHERE COALESCE(btrim(rp.permission_code), '') NOT IN ('', '*')
+   AND lower(btrim(rp.permission_code)) ~ '^[a-z][a-z0-9_.:-]{1,127}$'
+   AND NOT EXISTS (
+     SELECT 1 FROM alx_api_private.permissions p
+      WHERE p.code = lower(btrim(rp.permission_code))
+   )
+ON CONFLICT (resource, action) DO NOTHING;
+
+INSERT INTO alx_api_private.role_permissions (role_id, permission_id, assigned_by)
+SELECT r.role_id, p.permission_id, NULL
+  FROM public.roles legacy
+  JOIN alx_api_private.roles r ON r.code = lower(btrim(legacy.role_id))
+  JOIN public.role_permission rp ON rp.role_id = legacy.role_id
+  JOIN alx_api_private.permissions p ON p.code = lower(btrim(rp.permission_code))
+ WHERE COALESCE(btrim(rp.permission_code), '') NOT IN ('', '*')
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+INSERT INTO alx_api_private.role_permissions (role_id, permission_id, assigned_by)
+SELECT r.role_id, p.permission_id, NULL
+  FROM public.role_permission rp
+  JOIN alx_api_private.roles r ON r.code = lower(btrim(rp.role_id))
+  CROSS JOIN alx_api_private.permissions p
+ WHERE btrim(rp.permission_code) = '*'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+INSERT INTO alx_api_private.user_roles (user_id, role_id, assigned_by, assigned_at)
+SELECT u.user_id, r.role_id, NULL, NOW()
+  FROM public.users u
+  JOIN alx_api_private.roles r ON r.code = lower(btrim(u.role))
+ WHERE NOT EXISTS (SELECT 1 FROM alx_api_private.user_roles ur WHERE ur.user_id = u.user_id)
+ON CONFLICT (user_id, role_id) DO NOTHING;
+
+DROP TABLE IF EXISTS public.role_permission CASCADE;
+DROP TABLE IF EXISTS public.roles CASCADE;
+DROP TABLE IF EXISTS public.sessions CASCADE;
+```
+
+### 3) ترحيل 0041: قالب الطباعة في قاعدة البيانات
+```sql
+-- 0041_print_template_source_of_truth.sql
+ALTER TABLE public.settings_print_template
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS created_by text,
+  ADD COLUMN IF NOT EXISTS updated_by text;
+
+INSERT INTO public.settings_print_template (settings_key, created_at, updated_at)
+VALUES ('print_template', NOW(), NOW())
+ON CONFLICT (settings_key) DO NOTHING;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.settings_print_template TO alx_api_runtime;
+ALTER TABLE public.settings_print_template DISABLE ROW LEVEL SECURITY;
+```
+
+### 4) ترحيل 0042: دمج العملات واللوحة ثم إسقاط 10 جداول مكررة ويتيمة
+```sql
+-- 0042_drop_duplicate_and_orphan_tables.sql
+-- دمج العملات وأسعارها
+UPDATE public.currency c
+   SET main_name_ar = COALESCE(NULLIF(sc.name, ''), c.main_name_ar),
+       symbol       = COALESCE(NULLIF(sc.symbol, ''), c.symbol),
+       flag         = COALESCE(NULLIF(sc.flag, ''), c.flag),
+       is_active    = COALESCE(sc.is_active, c.is_active),
+       updated_at   = NOW()
+  FROM public.settings_custom_currency sc
+ WHERE sc.settings_key = 'general'
+   AND lower(btrim(sc.code)) = lower(btrim(c.code));
+
+INSERT INTO public.currency
+  (code, main_name_ar, sub_name_ar, main_name_en, sub_name_en, symbol, flag, is_default, is_active, created_at)
+SELECT sc.code, sc.name, '', '', '', sc.symbol, sc.flag, FALSE, COALESCE(sc.is_active, TRUE), NOW()
+  FROM public.settings_custom_currency sc
+ WHERE sc.settings_key = 'general' AND COALESCE(btrim(sc.code), '') <> ''
+   AND NOT EXISTS (SELECT 1 FROM public.currency c WHERE lower(btrim(c.code)) = lower(btrim(sc.code)))
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.cur_price (cur_no, price, day_date, seq, created_at, updated_at)
+SELECT c.cur_id, sc.rate_to_yer, NOW(),
+       COALESCE((SELECT MAX(cp.seq) FROM public.cur_price cp WHERE cp.cur_no = c.cur_id), 0) + 1,
+       NOW(), NOW()
+  FROM public.settings_custom_currency sc
+  JOIN public.currency c ON lower(btrim(c.code)) = lower(btrim(sc.code))
+ WHERE sc.settings_key = 'general' AND COALESCE(sc.rate_to_yer, 0) > 0
+   AND NOT EXISTS (SELECT 1 FROM public.cur_price cp WHERE cp.cur_no = c.cur_id AND cp.price = sc.rate_to_yer);
+
+-- دمج إعدادات اللوحة
+UPDATE public.user_settings us
+   SET dashboard_grid_columns = d.grid_columns, updated_at = NOW()
+  FROM public.settings_dashboard d
+ WHERE d.grid_columns IS NOT NULL AND (us.user_id = d.user_id OR us.user_setting_id = d.user_id);
+
+UPDATE public.user_settings us
+   SET visible_metrics = m.metric_keys, updated_at = NOW()
+  FROM (
+    SELECT dm.user_id, array_agg(dm.metric_key ORDER BY dm.seq, dm.metric_key)::text[] AS metric_keys
+      FROM public.settings_dashboard_metric dm GROUP BY dm.user_id
+  ) m WHERE us.user_id = m.user_id OR us.user_setting_id = m.user_id;
+
+-- إسقاط الجداول المكررة واليتيمة
+DROP TABLE IF EXISTS public.settings_custom_currency CASCADE;
+DROP TABLE IF EXISTS public.settings_report_account CASCADE;
+DROP TABLE IF EXISTS public.settings_dashboard_metric CASCADE;
+DROP TABLE IF EXISTS public.settings_dashboard CASCADE;
+DROP TABLE IF EXISTS public.report_template_filter CASCADE;
+DROP TABLE IF EXISTS public.report_exchange_rate CASCADE;
+DROP TABLE IF EXISTS public.report_settings CASCADE;
+DROP TABLE IF EXISTS public.public_tracking_product CASCADE;
+DROP TABLE IF EXISTS public.public_tracking_event CASCADE;
+DROP TABLE IF EXISTS public.settings CASCADE;
+```
+
+### 5) ترحيل 0043: نقل خرائط الترحيل إلى أعمدة رئيسية وإسقاط جداول ودوال الخرائط
+```sql
+-- 0043_replace_migration_maps_with_real_columns.sql
+ALTER TABLE public.accounts
+  ADD COLUMN IF NOT EXISTS superseded_by_account_id text,
+  ADD COLUMN IF NOT EXISTS superseded_at timestamptz;
+
+ALTER TABLE public.accounts
+  ADD CONSTRAINT accounts_superseded_by_account_id_fkey
+  FOREIGN KEY (superseded_by_account_id) REFERENCES public.accounts (account_id) ON DELETE SET NULL;
+
+WITH latest AS (
+  SELECT DISTINCT ON (m.old_account_id) m.old_account_id, m.new_account_id, m.migrated_at
+    FROM public.account_id_migration_map m
+   WHERE COALESCE(btrim(m.old_account_id), '') <> '' AND COALESCE(btrim(m.new_account_id), '') <> ''
+   ORDER BY m.old_account_id, m.migrated_at DESC NULLS LAST
+)
+UPDATE public.accounts a
+   SET superseded_by_account_id = l.new_account_id,
+       superseded_at = COALESCE(l.migrated_at, NOW())
+  FROM latest l
+ WHERE a.account_id = l.old_account_id
+   AND a.superseded_by_account_id IS NULL
+   AND EXISTS (SELECT 1 FROM public.accounts n WHERE n.account_id = l.new_account_id);
+
+DROP FUNCTION IF EXISTS public.rewrite_account_reference_jsonb;
+DROP TABLE IF EXISTS public.account_id_migration_map CASCADE;
+DROP TABLE IF EXISTS public.financial_legacy_migration_map CASCADE;
+DROP TABLE IF EXISTS public.financial_migration_exceptions CASCADE;
+DROP TABLE IF EXISTS public.portal_user_migration_map CASCADE;
+```
+
+### 6) تسجيل الترحيلات في supabase_migrations.schema_migrations
+```sql
+INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES
+  ('20261017040300', 'fix_runtime_access_and_financial_guard_0039'),
+  ('20261017040400', 'unify_rbac_in_alx_api_private_0040'),
+  ('20261017040430', 'print_template_source_of_truth_0041'),
+  ('20261017040500', 'drop_duplicate_and_orphan_tables_0042'),
+  ('20261017040600', 'replace_migration_maps_with_real_columns_0043')
+ON CONFLICT (version) DO NOTHING;
+```
+
+### 7) نتائج الفحص النهائي بعد التطبيق:
+- `currency_count` = 5
+- `cur_price_count` = 11
+- `report_templates_count` = 2
+- `legacy_tables_remaining` = 0
+- `public_jsonb_columns_remaining` = 0

@@ -22,8 +22,8 @@ import {
   mapLegacyAuthUserToDto,
   mapLegacyAuthUserToSessionState,
 } from '../../dtos/mappers/auth-session.mapper';
-import { supabase } from '../supabase.client';
-import { mapRow, mapSupabaseError } from '../supabase.mapper';
+import { mapRow } from '../supabase.mapper';
+import { alxListSessions } from '../../../lib/alxAuthGateway';
 
 const ROOT_ACCOUNT_EMAILS = new Set([
   'alsrhyarslan5@gmail.com',
@@ -33,7 +33,11 @@ const ROOT_ACCOUNT_EMAILS = new Set([
   'apo.1.read@gmail.com',
 ]);
 
-const mapSession = (row: Record<string, unknown>): AuthViewModel => ({ id: String(row.session_id ?? '') });
+const mapSession = (row: Record<string, unknown>): AuthViewModel => ({
+  id: String(row.sessionId ?? row.session_id ?? ''),
+  sessionId: String(row.sessionId ?? row.session_id ?? ''),
+  userId: String(row.userId ?? row.user_id ?? ''),
+});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -88,19 +92,19 @@ function readSystemPin(value: unknown): string | null {
 export class CurrentSupabaseAuthGateway implements AuthGateway {
   private pendingUser: LegacyAuthUser | null = null;
 
+  // الجلسات تُقرأ من alx_api وحده: جدول public.sessions أُسقط في الترحيل 0040 ولا مصدر آخر له.
+  // Sessions come only from alx_api: public.sessions is dropped by migration 0040 and has no other source.
   async list(query: GatewayQuery = {}): Promise<GatewayPage<AuthViewModel>> {
     const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
     const offset = Math.max(query.offset ?? 0, 0);
-    const { data, error, count } = await supabase.from('sessions').select('session_id,user_id,created_at,last_seen,force_logout', { count: 'exact' }).range(offset, offset + limit - 1);
-    if (error) throw mapSupabaseError(error);
-    const items = (data ?? []).map((row: unknown) => mapRow(row, mapSession));
-    return { items, limit, offset, hasMore: (count ?? offset + items.length) > offset + items.length };
+    const items = (await alxListSessions()).map((row) => mapRow(row, mapSession));
+    const paged = items.slice(offset, offset + limit);
+    return { items: paged, limit, offset, hasMore: items.length > offset + paged.length };
   }
 
   async getById(id: string): Promise<AuthViewModel | null> {
-    const { data, error } = await supabase.from('sessions').select('session_id,user_id,created_at,last_seen,force_logout').eq('session_id', id).maybeSingle();
-    if (error) throw mapSupabaseError(error);
-    return data ? mapRow(data, mapSession) : null;
+    const session = (await alxListSessions()).find((row) => String(row.sessionId ?? row.session_id ?? '') === id);
+    return session ? mapRow(session, mapSession) : null;
   }
 
   async authenticate(identifier: string, password: string): Promise<CurrentUserDto> {

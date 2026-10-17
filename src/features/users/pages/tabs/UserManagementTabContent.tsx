@@ -3,6 +3,7 @@ import {
   Search, Edit2, UserX, UserCheck, Trash2, Crown, ShieldAlert, Activity, Timer,
   WifiOff, Key, Zap, MonitorCheck, Users as UsersIcon, Info
 } from 'lucide-react';
+import { UserActivityLogsTab } from '../../components/UserActivityLogsTab';
 
 type TabUser = {
   id: string; fullName: string; email: string; username: string; role: string;
@@ -33,6 +34,7 @@ export interface UserManagementTabContentProps {
   setIsSessionModalOpen: React.Dispatch<React.SetStateAction<boolean>>; handleDeleteUser: (id: string, name: string) => void | Promise<void>;
   users: TabUser[]; dbSessions: TabSession[]; sessionId: string | null | undefined; currentUserDoc: TabUser | null | undefined;
   setConfirmConfig: React.Dispatch<React.SetStateAction<ConfirmConfig>>; filteredLogs: TabActivityLog[];
+  activityLogs?: TabActivityLog[];
   logFilter: string; setLogFilter: React.Dispatch<React.SetStateAction<string>>; logUserFilter: string; setLogUserFilter: React.Dispatch<React.SetStateAction<string>>;
   logLimit: number; setLogLimit: React.Dispatch<React.SetStateAction<number>>; getActionMeta: (action: string, isAr: boolean) => ActionMeta;
   isSessionOnline: (session: TabSession) => boolean; handleRequestTerminateSession: (session: TabSession) => void;
@@ -52,7 +54,7 @@ export const UserManagementTabContent: React.FC<UserManagementTabContentProps> =
     role, getRoleBadgeStyle, getTempBanRemaining, getTimeSince, isUserOnline,
     handleToggleStatus, handleOpenEdit, handleResetPassword, setSessionTargetUser,
     setIsSessionModalOpen, handleDeleteUser, users, dbSessions, sessionId,
-    currentUserDoc, setConfirmConfig, filteredLogs, logFilter, setLogFilter,
+    currentUserDoc, setConfirmConfig, filteredLogs, activityLogs, logFilter, setLogFilter,
     handleOpenEditRole, handleDeleteRole, ALL_PERMISSIONS,
     logUserFilter, setLogUserFilter, logLimit, setLogLimit, getActionMeta,
     isSessionOnline, handleRequestTerminateSession
@@ -372,86 +374,19 @@ export const UserManagementTabContent: React.FC<UserManagementTabContentProps> =
       {/* TAB 4: ACTIVITY LOG                               */}
       {/* ══════════════════════════════════════════════════ */}
       {activeTab === 'activity' && (
-        <div className="space-y-4">
-          {!hasPermission('view_activity_log') ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-[#121215] border border-slate-800 rounded-2xl text-center">
-              <ShieldAlert className="w-12 h-12 text-rose-500 mb-4 animate-pulse" />
-              <p className="text-slate-500 text-sm font-bold">{t('ليس لديك صلاحية عرض سجل النشاط', 'No permission to view activity log')}</p>
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-3 p-4 bg-black/30 border border-slate-800/50 rounded-2xl">
-                <select value={logFilter} onChange={e => setLogFilter(e.target.value)} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
-                  <option value="all">{t('جميع الأنواع', 'All Actions')}</option>
-                  {['add_user', 'edit_user', 'disable_user', 'enable_user', 'delete_user', 'reset_password', 'force_logout', 'temp_ban', 'add_role', 'edit_role', 'delete_role', 'add_order', 'edit_order', 'delete_order', 'edit_delivered_order', 'change_exchange_rate', 'add_expense', 'add_customer'].map(a => (
-                    <option key={a} value={a}>{getActionMeta(a, isAr).label}</option>
-                  ))}
-                </select>
-                <select value={logUserFilter} onChange={e => setLogUserFilter(e.target.value)} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
-                  <option value="all">{t('جميع المستخدمين', 'All Users')}</option>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
-                </select>
-                <select value={logLimit} onChange={e => setLogLimit(Number(e.target.value))} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
-                  {[25, 50, 100, 200].map(n => <option key={n} value={n}>{n} {t('سجل', 'records')}</option>)}
-                </select>
-                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold">
-                  <Activity className="w-3.5 h-3.5" /> {filteredLogs.length} {t('سجل', 'records')}
-                </div>
-              </div>
-
-              <div className="bg-[#121215] border border-slate-800/50 rounded-2xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full" dir={isAr ? 'rtl' : 'ltr'}>
-                    <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-800/40">
-                      <tr>
-                        <th className="p-4 text-start">{t('النشاط', 'Action')}</th>
-                        <th className="p-4 text-start">{t('الموظف', 'Staff')}</th>
-                        <th className="p-4 text-start">{t('الهدف', 'Target')}</th>
-                        <th className="p-4 text-start">{t('تفاصيل', 'Details')}</th>
-                        <th className="p-4 text-center">{t('الوقت', 'Time')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-xs divide-y divide-slate-800/30">
-                      {filteredLogs.map(log => {
-                        const meta = getActionMeta(log.action, isAr);
-                        const ts = typeof log.timestamp === 'object' && log.timestamp !== null && 'toDate' in log.timestamp
-                          ? log.timestamp.toDate()
-                          : typeof log.timestamp === 'string' || typeof log.timestamp === 'number' ? new Date(log.timestamp) : null;
-                        return (
-                          <tr key={log.id} className="hover:bg-slate-900/10 transition-colors">
-                            <td className="p-4">
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-${meta.color}-950/20 text-${meta.color}-400 border border-${meta.color}-900/20 text-[9px] font-black`}>
-                                {meta.icon} {meta.label}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              <div className="font-bold text-white text-[11px]">{log.userName || '—'}</div>
-                              <div className="text-[9px] text-slate-500 font-bold uppercase">{log.userRole || ''}</div>
-                            </td>
-                            <td className="p-4 text-slate-300 font-bold text-[11px]">{log.target || '—'}</td>
-                            <td className="p-4 max-w-xs">
-                              {log.details && Object.keys(log.details).length > 0 ? (
-                                <div className="text-[9px] text-slate-500 font-mono truncate">
-                                  {Object.entries(log.details).slice(0, 2).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(' | ')}
-                                </div>
-                              ) : <span className="text-slate-700 text-[9px]">—</span>}
-                            </td>
-                            <td className="p-4 text-center text-[9px] text-slate-500 font-bold whitespace-nowrap">
-                              {ts ? ts.toLocaleString(isAr ? 'ar-EG' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {filteredLogs.length === 0 && (
-                        <tr><td colSpan={5} className="p-16 text-center text-slate-600 font-bold text-[10px] uppercase tracking-widest">{t('[ لا توجد سجلات ]', '[ no activity logs ]')}</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+        <UserActivityLogsTab
+          isAr={isAr}
+          activityLogs={activityLogs || filteredLogs}
+          users={users}
+          hasPermission={hasPermission}
+          logFilter={logFilter}
+          setLogFilter={setLogFilter}
+          logUserFilter={logUserFilter}
+          setLogUserFilter={setLogUserFilter}
+          logLimit={logLimit}
+          setLogLimit={setLogLimit}
+          getActionMeta={getActionMeta}
+        />
       )}
 
 </>

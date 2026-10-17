@@ -14,6 +14,7 @@ interface UserActivityLogsTabProps {
   setLogUserFilter?: (user: string) => void;
   logLimit?: number;
   setLogLimit?: (limit: number) => void;
+  getActionMeta?: (action: string, isAr: boolean) => { color: string; label: string; icon: React.ReactNode };
 }
 
 export const UserActivityLogsTab: React.FC<UserActivityLogsTabProps> = ({
@@ -29,6 +30,7 @@ export const UserActivityLogsTab: React.FC<UserActivityLogsTabProps> = ({
   setLogUserFilter: propsSetLogUserFilter,
   logLimit: propsLogLimit,
   setLogLimit: propsSetLogLimit,
+  getActionMeta,
 }) => {
   const [localLogFilter, setLocalLogFilter] = useState('all');
   const [localLogUserFilter, setLocalLogUserFilter] = useState('all');
@@ -56,6 +58,20 @@ export const UserActivityLogsTab: React.FC<UserActivityLogsTabProps> = ({
       .slice(0, logLimit);
   }, [activityLogs, logFilter, logUserFilter, logLimit, searchTerm]);
 
+  const availableActions = useMemo(() => {
+    const defaultActions = [
+      'add_user', 'edit_user', 'disable_user', 'enable_user', 'delete_user',
+      'reset_password', 'force_logout', 'temp_ban', 'add_role', 'edit_role',
+      'delete_role', 'add_order', 'edit_order', 'delete_order', 'edit_delivered_order',
+      'change_exchange_rate', 'add_expense', 'add_customer'
+    ];
+    const set = new Set<string>(defaultActions);
+    activityLogs.forEach((l: any) => {
+      if (l.action && typeof l.action === 'string') set.add(l.action);
+    });
+    return Array.from(set);
+  }, [activityLogs]);
+
   return (
     <div className="space-y-4">
       {!hasPermission('view_activity_log') ? (
@@ -69,13 +85,13 @@ export const UserActivityLogsTab: React.FC<UserActivityLogsTabProps> = ({
         <>
           <div className="flex flex-wrap gap-3 p-4 bg-black/30 border border-slate-800/50 rounded-2xl items-center">
             <div className="relative min-w-[200px] flex-1">
-              <Search className="w-4 h-4 text-slate-500 absolute top-2.5 right-3" />
+              <Search className={`w-4 h-4 text-slate-500 absolute top-2.5 ${isAr ? 'right-3' : 'left-3'}`} />
               <input
                 type="text"
-                placeholder={isAr ? 'بحث في سجل النشاط...' : 'Search logs...'}
+                placeholder={isAr ? 'بحث في سجل النشاط بالهدف أو الموظف أو التفاصيل...' : 'Search logs by target, staff, or details...'}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full bg-black/50 border border-slate-800 text-slate-200 rounded-xl pr-9 pl-3 py-2 text-xs outline-none focus:border-[#d4af37]/50"
+                className={`w-full bg-black/50 border border-slate-800 text-slate-200 rounded-xl ${isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'} py-2 text-xs outline-none focus:border-[#d4af37]/50`}
               />
             </div>
 
@@ -85,9 +101,10 @@ export const UserActivityLogsTab: React.FC<UserActivityLogsTabProps> = ({
               className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50"
             >
               <option value="all">{isAr ? 'جميع الأنواع' : 'All Actions'}</option>
-              {['add_user', 'edit_user', 'disable_user', 'enable_user', 'delete_user', 'reset_password', 'force_logout', 'add_role', 'edit_role', 'delete_role', 'add_order', 'edit_order', 'delete_order'].map(a => (
-                <option key={a} value={a}>{a}</option>
-              ))}
+              {availableActions.map(a => {
+                const label = getActionMeta ? getActionMeta(a, isAr).label : a;
+                return <option key={a} value={a}>{label}</option>;
+              })}
             </select>
 
             <select
@@ -106,9 +123,10 @@ export const UserActivityLogsTab: React.FC<UserActivityLogsTabProps> = ({
               onChange={e => setLogLimit(Number(e.target.value))}
               className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50"
             >
-              {[25, 50, 100, 200].map(n => (
+              {[25, 50, 100, 200, 500, 1000].map(n => (
                 <option key={n} value={n}>{n} {isAr ? 'سجل' : 'records'}</option>
               ))}
+              <option value={100000}>{isAr ? 'عرض الكل' : 'All records'}</option>
             </select>
 
             <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold">
@@ -130,12 +148,19 @@ export const UserActivityLogsTab: React.FC<UserActivityLogsTabProps> = ({
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-800/30">
                   {filteredLogs.map((log: any) => {
-                    const ts = log.timestamp?.toDate ? log.timestamp.toDate() : log.timestamp ? new Date(log.timestamp) : null;
+                    const meta = getActionMeta ? getActionMeta(log.action, isAr) : null;
+                    const ts = log.timestamp?.toDate
+                      ? log.timestamp.toDate()
+                      : log.timestamp
+                        ? new Date(log.timestamp)
+                        : log.createdAt
+                          ? (log.createdAt instanceof Date ? log.createdAt : new Date(log.createdAt))
+                          : null;
                     return (
                       <tr key={log.id || Math.random()} className="hover:bg-slate-900/10 transition-colors">
                         <td className="p-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/20 text-amber-400 border border-amber-900/20 text-[9px] font-black">
-                            {log.action}
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${meta ? `bg-${meta.color}-950/20 text-${meta.color}-400 border border-${meta.color}-900/20` : 'bg-amber-950/20 text-amber-400 border border-amber-900/20'} text-[9px] font-black`}>
+                            {meta?.icon} {meta ? meta.label : log.action}
                           </span>
                         </td>
                         <td className="p-4">

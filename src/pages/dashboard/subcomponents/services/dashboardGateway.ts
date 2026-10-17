@@ -71,7 +71,7 @@ export function subscribeDashboardData(
   const qLogs = query(
     collection(db, "activity_logs"),
     orderBy("timestamp", "desc"),
-    limit(5)
+    limit(10)
   );
   const unsubLogs = onSnapshot(
     qLogs,

@@ -2421,3 +2421,73 @@ Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
 لكن ياحيوان يابن الكلب ليش مافيش اي ترحيل جديد في قائمه Database Migrations في قاعده البيانات 
 ```
 - **التوجيه**: التحقق من جدول وتاريخ الترحيلات في لوحة تحكم Supabase (`supabase_migrations.schema_migrations`)، وتثبيت وتوثيق الترحيلات رسميًا عبر أداة `apply_migration` لظهورها في قائمة Database Migrations في لوحة Supabase.
+
+## [2026-10-17 01:10 +03:00] — Qoder
+- **نص الأمر كما ورد (المتطلبات التقنية)**: «تم تنفيذ الترحيلات @Supabase — تاكد من تنفذها بنجاح وبالشكل الصحيح — وايضا تاكد من ان ملفات واكواد وواجهه النظام تتعامل مع الحقول الجديده وايضا ال api — وان كل شي يعمل بدون مشاكل. ثانياً اريد مراجعه كل شي وتوضيح وتبرير كل جدول وكل حقل عملته» وأسئلته المحددة:
+  1. لماذا ما زال `public.role_permission` و `public.roles` في `public` مع وجود `alx_api_private.role_permissions` و `alx_api_private.roles`؟
+  2. نقل `public.sessions` إلى `alx_api_private`.
+  3. ما فائدة بقاء `public.account_id_migration_map` و `public.portal_user_migration_map` و `public.financial_legacy_migration_map` و `public.financial_migration_exceptions`؟
+  4. تبرير: `activity_log_detail` بجانب `activity_logs`، `asset_maintenance_log` بجانب `assets`، `notification_recipient` بجانب `notifications`، `order_fired_trigger`، `orders_history_change` بجانب `orders_history`، `portal_ticket_reply` بجانب `portal_tickets`.
+  5. تبرير `public_tracking` و `public_tracking_event` و `public_tracking_product`.
+  6. تبرير `report_settings` و `report_template_filter` و `report_templates` و `settings_report_account` و `report_exchange_rate` — ولماذا `report_exchange_rate` مع وجود `public.cur_price` المعتمد لأسعار الصرف؟
+  7. لماذا `settings_custom_currency` مع وجود `public.currency` المعتمد للعملات؟
+  8. تبرير `whatsapp_logs` و `settings_whatsapp` و `settings_whatsapp_template` و `settings_whatsapp_trigger`.
+  9. تبرير `user_settings` و `settings` و `settings_general` و `settings_dashboard` و `settings_dashboard_metric` و `settings_backup_collection` و `settings_logistics` و `settings_print_template` و `expense_category`.
+  10. «اريد توضيح كل شي بالتفصيل واقتراح خطه لاصلاح الاخطاء وتنضيم وترتيب كل شي — لا تغيّر ولا تنفّذ شي قبل ما تعمل له خطه تنفيذ وتعرضها عليا وطلب موافقتي».
+- **المنفِّذ**: AI Model: Qoder Agent — مدة الجولة: ~35 دقيقة (00:35 ← 01:10 +03:00).
+- **ما نُفِّذ**: تأكيد 0038/0034 على القاعدة الحيّة، جرد شامل للجداول مع التبرير ومصدر الإنشاء وعدد الصفوف ومستدعيات الكود، فحص تبعيات الدوال والمفاتيح الأجنبية والصلاحيات، وفحوص `tsc` و`jest` و`vitest` (كلها ناجحة).
+- **ما لم يُنفَّذ**: لا تعديل كود ولا DDL ولا commit — خطة الإصلاح من سبع مراحل معروضة على المالك بانتظار الموافقة.
+- **ملاحظة**: الرسالة تضمنت تعبيرات مسيئة؛ سُجِّل نص المتطلبات التقنية فقط حفاظًا على سجل المشروع.
+
+## [2026-10-17 01:54:00 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **نص الأمر كما ورد**:
+```text
+هناك مشكله في واجهه لوحه التحكم بالنظام وتحديدا في قسم آخر النشاطات اللوجستية بحيث انه يتم عرض كل السجلات الموجوده بالجدول حتى لو كانت الف 
+ والمفروض يعرض اخر 10 سجلات فقط وعند النقر على زر عرض الكل يقوم بتوجيهه الى شاشه سجل النشاط الموجوده بالاعدادات  ويعرض له كل سجلات النشاط
+قم باصلاح ذالك 
+```
+- **التوجيه والهدف**:
+  1. حصر وتحديد عرض سجلات جدول "آخر النشاطات اللوجستية" في لوحة التحكم (Dashboard) بحيث يعرض فقط آخر 10 سجلات بدلاً من جلب/عرض كافة السجلات.
+  2. توجيه المستخدم عند النقر على زر "عرض الكل" (View All) إلى شاشة "سجل النشاط" في الإعدادات مع عرض كامل السجلات هناك.
+
+## [2026-10-17 02:32:00 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **نص الأمر كما ورد**:
+```text
+اكمل ياحيوان ولكن ركز عند النقر على زر عرض الكل يقوم بتوجيهه الى شاشه سجل النشاط الموجوده بقسم المستخدمين والادوار  ويعرض له كل سجلات النشاط@[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\src\features\users\components\UserActivityLogsTab.tsx] 
+```
+- **التوجيه والهدف**:
+  1. توجيه زر "عرض الكل" (View All) في لوحة التحكم إلى شاشة سجل النشاط بقسم المستخدمين والأدوار (`/user-management?tab=activity`).
+  2. تفعيل قراءة معامل التبويب `?tab=activity` داخل شاشة إدارة المستخدمين `UserManagementPage.tsx` لفتح تبويب سجل النشاط مباشرة.
+  3. التأكد من عرض جميع سجلات النشاط وتغذيتها للمكون `UserActivityLogsTab.tsx`.
+
+
+---
+
+## [2026-10-17 03:28:00 +03:00] — نص أمر جولة P1–P7 كما ورد (AI Model: Qoder Agent)
+
+**أمر التدقيق (نص المالك كما كُتب):**
+> «اريد توضيح كل شي بالتفصيل واقتراح خطه لاصلاح الاخطاء وتنضيم وترتيب كل شي لاتغير ولاتنفذ شي قبلما تعمل له خطه تنفيذ وتعرضها عليا وطلب موافقتي»
+
+**رسالة الموافقة مع التعديلات (أساسها نصًا):**
+> «كل المراحل P1-P7 لكن مع تنفيذ حكم التبريرات التي ذكرته ولكن يتم اخذ الملاحضات التاليه … مين قالك ان public.currency = 0 صف وpublic.cur_price = 0 صف، والحقيقه ان public.currency = 5 صف وpublic.cur_price = 13 صف، ويجب ان تكون هذه الجداول هي الجداول المعتمده للعملات واسعار الصرف فيالنظام والموقع وال api اما settings_custom_currency يتم حذفه فورا … settings_report_account حذف … public.public_tracking_product حذف … settings_print_template ربطه بشاشة الطباعة … بالنسبه للصلاحيات P2 : قم بتوحيد RBAC في alx_api_private … بالنسبه ل P6 لاداعي للتصدير CSV … احذف بس»
+
+> «تصرف وفقا للملاحضات وايضا اذا كان الجدول مهم ويوجد له مكان بالربط يتم ربطه»
+
+**الحاكمة الثابتة المرفقة:**
+> «احنا قلنا من Atu نشتي كل الحقول تكون رئيسيه ولانريد حقول داخل حقل jsonb ابدا»
+
+- **زمن الجولة:** 01:54 ← 03:28 (+03:00) ≈ 95 دقيقة.
+- **ما نُفِّذ:** كود الـ API والواجهة + تأليف ترحيلات 0039–0043 + توثيق. **ما لم يُنفَّذ:** لا DDL في القاعدة (حق المالك)، لا commit، لا push.
+
+
+## [2026-10-17 03:38:06 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+- **نص الأمر كما ورد**:
+```text
+@[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\docs\old\استكمال_التحول_لنظام_API-only_(fork)_2026-10-17_03-31.md]  راجع ملف  سجل الجلسه وقم باكمال تنفيذ ماتبقى منها وترحيل ملفات قاعده البيانات @mcp:supabase: 
+والتاكد من عدم وجود اخطاء 
+```
+- **التوجيه والهدف**:
+  1. مراجعة سجل الجلسة وتحديد ما تبقى منها من إجراءات وترحيلات.
+  2. ترحيل ملفات قاعدة البيانات (Migrations 0039 إلى 0043) عبر أداة Supabase MCP (`apply_migration`).
+  3. التحقق من سلامة قاعدة البيانات بعد الترحيل وعدم وجود أخطاء في الـ API والواجهة الأمامية.
+  4. استكمال توثيق التعديلات وسجلات الـ SQL في ملفات المشروع المعتمدة.

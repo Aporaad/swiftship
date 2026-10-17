@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { rolesApiDataGateway } from '../../roles/services/rolesApiDataGateway';
 import { financeApiDataGateway } from '../../../components/financeAccounting/FinanceApiDataGateway';
@@ -448,9 +449,32 @@ export default function UserManagementPage() {
   const { settings } = useSettings();
   const { role, hasPermission, profile: currentUserDoc, loading: roleLoading, sessionId } = useRole();
   const isAr = settings.language === 'ar';
-  const t = (ar: string, en: string) => isAr ? ar : en;
+  const t = (ar: string, en: string) => (isAr ? ar : en);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab') as TabId | null;
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    if (tabFromUrl && ['users', 'roles', 'sessions', 'activity'].includes(tabFromUrl)) {
+      return tabFromUrl;
+    }
+    return 'users';
+  });
 
-  const [activeTab, setActiveTab] = useState<TabId>('users');
+  useEffect(() => {
+    const tabParam = searchParams.get('tab') as TabId | null;
+    if (tabParam && ['users', 'roles', 'sessions', 'activity'].includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (newTab: TabId) => {
+    setActiveTab(newTab);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', newTab);
+      return next;
+    }, { replace: true });
+  };
+
   const [roleActiveTab, setRoleActiveTab] = useState<string>('all');
 
   // ── Data ─────────────────────────────────────────────────
@@ -635,7 +659,7 @@ export default function UserManagementPage() {
     let disposed = false;
     const refreshLogs = async () => {
       try {
-        const rows = await usersApiDataGateway.listActivityLogs({ limit: 500 });
+        const rows = await usersApiDataGateway.listActivityLogs({ limit: 1000 });
         if (!disposed) setActivityLogs(rows.map(toActivity));
       } catch (err: unknown) {
         console.warn('[UserManagement] Activity log load failed:', getErrorMessage(err));
@@ -1169,7 +1193,7 @@ export default function UserManagementPage() {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            <button key={tab.id} onClick={() => handleTabChange(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap flex-1 justify-center ${isActive ? 'bg-gradient-to-r from-[#d4af37]/20 to-transparent text-white border border-[#d4af37]/30 shadow-inner' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.02]'}`}>
               <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-[#d4af37]' : ''}`} />
               <span className="hidden sm:inline">{tab.label}</span>

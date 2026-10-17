@@ -68,6 +68,7 @@ import {
   type ReportFilter,
 } from "../types/reports.types";
 import { reportsApiDataGateway } from "../services/reportsApiDataGateway";
+import { printTemplateApiDataGateway } from "../services/printTemplateApiDataGateway";
 
 export default function ReportsPage() {
   const { settings } = useSettings();
@@ -421,19 +422,18 @@ export default function ReportsPage() {
     setSelectedExpenseCategory(null);
   }, [activeReport]);
 
-  // Load local report templates and print preferences; business data comes from API.
+  // Load local report templates; the print template comes from its database table through the API.
   useEffect(() => {
     try {
       setSavedReportTemplates(
         JSON.parse(localStorage.getItem("swiftship.report_templates") || "[]")
       );
-      const print = JSON.parse(
-        localStorage.getItem("swiftship.print_template") || "null"
-      );
-      if (print) setPrintSettings(previous => ({ ...previous, ...print }));
     } catch (error) {
       console.warn("Unable to load local report preferences.", error);
     }
+    void printTemplateApiDataGateway.load().then((stored) => {
+      if (stored) setPrintSettings(previous => ({ ...previous, ...stored }));
+    });
     setLoading(false);
   }, []);
 
@@ -495,14 +495,11 @@ export default function ReportsPage() {
     selectedCourierId,
   ]);
 
-  // Save changes to print settings template in supabase
+  // Save the print template to its approved database table (public.settings_print_template).
   const handleSavePrintSettings = async () => {
     setSavingTemplate(true);
     try {
-      localStorage.setItem(
-        "swiftship.print_template",
-        JSON.stringify(printSettings)
-      );
+      await printTemplateApiDataGateway.save(printSettings);
       notificationService.notify({
         title: isAr ? "تم الحفظ بنجاح" : "Settings Saved",
         message: isAr

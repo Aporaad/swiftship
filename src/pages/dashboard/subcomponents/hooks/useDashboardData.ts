@@ -297,7 +297,22 @@ export function useDashboardData({
 
   const recentActivities = useMemo(() => {
     if (realLogs.length === 0) return [];
-    return realLogs.map(log => {
+    // فرز السجلات تنازلياً حسب الوقت لضمان عرض أحدث 10 سجلات نشاط — sort descending to guarantee latest 10
+    const sortedLogs = [...realLogs].sort((a, b) => {
+      const getLogTime = (item: any) => {
+        if (item.createdAt) {
+          return item.createdAt instanceof Date ? item.createdAt.getTime() : new Date(item.createdAt).getTime();
+        }
+        if (item.timestamp) {
+          return item.timestamp instanceof Date ? item.timestamp.getTime() : new Date(item.timestamp).getTime();
+        }
+        return 0;
+      };
+      return getLogTime(b) - getLogTime(a);
+    });
+
+    // الاقتصار على آخر 10 سجلات نشاط فقط — strictly latest 10 activities
+    return sortedLogs.slice(0, 10).map(log => {
       let title = isAr
         ? DASHBOARD_ACTION_LABELS[
             log.action as keyof typeof DASHBOARD_ACTION_LABELS
@@ -342,7 +357,11 @@ export function useDashboardData({
         ? log.createdAt instanceof Date
           ? log.createdAt.getTime()
           : new Date(log.createdAt).getTime()
-        : now;
+        : log.timestamp
+          ? log.timestamp instanceof Date
+            ? log.timestamp.getTime()
+            : new Date(log.timestamp).getTime()
+          : now;
       const diffMs = now - (isNaN(logTime) ? now : logTime);
       const mins = Math.floor(diffMs / 60000);
       let timeStr = "";

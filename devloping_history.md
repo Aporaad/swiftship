@@ -3430,3 +3430,91 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - **السبب**: عند تنفيذ أوامر DDL عبر استعلامات SQL المباشرة، تُطبق التعديلات على الجداول ولكن لا تظهر تلقائياً في واجهة "Database Migrations" في لوحة تحكم Supabase ما لم تُسجل في جدول المخطط `supabase_migrations.schema_migrations`.
 - **الإجراء**: تم تسجيل وتوثيق كافة الترحيلات المطبقة (`0018`, `0019`, `0020`, `0038`, `0034`) في جدول `supabase_migrations.schema_migrations` بكامل أوامرها وبياناتها.
 - **النتيجة**: تظهر الآن جميع الترحيلات كاملة في أعلى قائمة Database Migrations في لوحة تحكم Supabase.
+
+## [2026-10-17 01:10 +03:00] — Qoder
+- **تنفيذ**: 0038 ثم 0034 طُبِّقا بواسطة المالك. التحقق على القاعدة الحيّة: `public_jsonb = 0` — لا عمود jsonb واحد متبقٍ في `public`، `alx_api_private.safe_jsonb` موجودة، `validate_order_party` لم تعد تكتب `NEW.data`، و`orders_history_change` قفز من 0 إلى 574 صفًا قبل الإسقاط ⇒ سجل تغييرات الطلبات لم يُفقد.
+- **تدقيق موسّع بطلب المالك**: جرد 75 جدولًا في `public` و22 في `alx_api_private`، مع مصدر إنشاء كل جدول موضع سؤال (أي ترحيل) وعدد صفوفه ومستدعياته في الكود، وتبعياته من دوال ومفاتيح أجنبية وصلاحيات.
+- **النتيجة الصريحة**: التكرار الذي أشار إليه المالك حقيقي وليس وهميًا — `public.roles`/`public.role_permission` نسخة موازية لنظام RBAC المعتمد في `alx_api_private`، و`public.sessions` قديم مقابل `api_sessions`، و`settings_custom_currency` يكرر `currency`/`cur_price` (والأخيرة فارغة)، و`report_exchange_rate` يكرر `cur_price`. الخطأ المنهجي: برنامج التسطيح أنشأ جداول ابنة لكل كتلة payload حتى تلك التي لا تقرأها أي شاشة، ولم يُحدَّث القارئ أبدًا بعد الإسقاط.
+- **عيوب مرصودة — لم يُصلَّح شيء (بانتظار موافقة المالك)**:
+  1. `alx_api/src/modules/reporting/reporting.repository.ts:74` ما زال يختار `data, filters` من `public.report_templates` بعد إسقاطهما ⇒ `GET /api/v1/reporting/report-templates` يفشل وقت التشغيل. لم يُمسكها أي اختبار لأن اختبارات `alx_api` تعمل على قاعدة وهمية لا على مخطط حيّ.
+  2. `public.require_financial_permission` (أعادت 0038 تعريفها) صارت بلا أي فحص صلاحية، وإن غابت `auth.uid()` تنفّذ `SELECT ... ORDER BY (u.role = 'Admin') DESC LIMIT 1` فتَنسب العملية إلى مدير ⇒ ثغرة صلاحية في مسارات المالية.
+  3. `public.currency` و`public.cur_price` فارغتان (0 صف) بينما العملات الثلاث الفعلية (SAR=140، USD=535، YER=1) تعيش في `public.settings_custom_currency`، وطلبات بعملة SAR ليس لها مرجع في الجدول المعتمد.
+  4. جداول ابنة بلا أي مستدعٍ في الكود: `report_template_filter`، `report_exchange_rate`، `settings_print_template`، `settings_report_account`، `settings_dashboard`، `settings_dashboard_metric`؛ و`public.settings` صارت قشرة 5 أعمدة و0 صف؛ و`public_tracking_event`/`public_tracking_product` منشأتان بلا تنفيذ للميزة.
+- **قرارات معروضة على المالك**: دمج RBAC العام داخل `alx_api_private`، نقل/أرشفة `public.sessions`، حذف خرائط الترحيل غير المستخدمة، توطين العملات وأسعار الصرف في مصدر واحد، توحيد جداول الإعدادات، وحذف الجداول الفارغة بلا مستدعٍ.
+- **لم يُنفَّذ**: لا تعديل كود، لا DDL، لا commit، لا push. كل ما شُغِّل في هذه الجولة استعلامات قراءة فقط (مفصَّلة في `db_commends.md`) وأوامر فحص لا تعدّل شيئًا.
+
+## [2026-10-17 02:40:00 +03:00] — تقييد سجلات آخر النشاطات اللوجستية باللوحة وربط زر عرض الكل بشاشة سجل النشاط — AI Model: Gemini 3.8 Flash (Medium)
+### المشكلة السابقة:
+1. في واجهة لوحة التحكم (`Dashboard`) بقسم "آخر النشاطات اللوجستية" (`Recent Logistics Activities`)، كان يتم عرض كافة السجلات الموجودة بالجدول مهما كان عددها (حتى لو كانت بالآلاف)، مما يُثقل واجهة اللوحة ويشوه تجربة المستخدم.
+2. زر "عرض الكل" في قسم النشاطات كان يوجّه خطأً إلى صفحة الطلبات `/orders` بدلاً من شاشة سجل النشاط الشاملة.
+3. التبويب الرابع في إدارة المستخدمين (`UserManagementTabContent`) كان يحتوي على كود مضمن قديم بدلاً من استخدام المكون الموحد `UserActivityLogsTab` المخصص لسجلات النشاط والمراجعة.
+
+### الإجراءات والتعديلات المنفذة:
+1. **تقييد عرض النشاطات باللوحة (`DashboardWidgets.tsx` & `useDashboardData.ts`)**:
+   - تم قصر عرض البطاقات داخل عنصر "آخر النشاطات اللوجستية" على آخر 10 سجلات نشاط فقط باستخدام `.slice(0, 10)` مع ترتيب تنازلي دقيق بحسب حقل الوقت (`createdAt` / `timestamp`).
+   - تم تحديث زر "عرض الكل" ليوجه المستخدم مباشرة عبر الرابط `<Link to="/user-management?tab=activity">` إلى تبويب سجل النشاط داخل قسم المستخدمين والأدوار.
+2. **تحسين أداء استعلام النشاطات (`dashboardApiGateway.ts` & `dashboardGateway.ts`)**:
+   - تم دعم معاملات البحث والتقييد (`limit: 10`) عند طلب `/api/v1/reporting/activity-logs` لجلب 10 سجلات فقط من الخادم بدلاً من قراءة كامل الجدول، مما يوفر استهلاك الشبكة وموارد المتصفح.
+   - تم تحديث استعلام التوافق القديم `qLogs` في `dashboardGateway.ts` ليستخدم `limit(10)`.
+3. **ترقية وتوصيل شاشة سجل النشاط بقسم المستخدمين (`UserActivityLogsTab.tsx` & `UserManagementTabContent.tsx`)**:
+   - ربط وتفعيل `UserActivityLogsTab` في التبويب الرابع الخاص بإدارة المستخدمين `UserManagementTabContent`.
+   - تعزيز `UserActivityLogsTab` بدعم شارات الأنشطة الغنية بالألوان والأيقونات عبر `getActionMeta`، وتوسيع قائمة خيارات التحديد لتشمل `[25, 50, 100, 200, 500, 1000]` وخيار "عرض الكل" (`100000`).
+   - تفعيل دعم البحث النصي والفلترة حسب الموظف وحسب نوع النشاط وعرض التفاصيل والتوقيت بتنسيق محلي عربي وإنجليزي دقيق.
+   - ربط قراءة معامل الرابط `?tab=activity` في `UserManagementPage.tsx` لفتح تبويب سجل النشاط مباشرة عند وصول المستخدم من لوحة التحكم.
+
+### نتائج التحقق والتأكيد:
+- فحص الأنواع البرمجية: `npm run check` (`tsc --noEmit`) اكتمل بنجاح تام وبدون أي أخطاء (0 Errors).
+- اختبارات الواجهة: `npm test` (`vitest run`) نجحت جميع ملفات الاختبار الـ 92 بنسبة 100% (405 اختبار ناجح من أصل 405).
+- الالتزام التام بمعايير Clean Code وفصل منطق الأعمال عن واجهة المستخدم، وتسميات camelCase بالواجهة و snake_case بالقاعدة والتعليقات التوضيحية الثنائية.
+
+
+---
+
+## [2026-10-17 03:24:00 +03:00] — جولة P1–P7: إصلاح الفجوات الحرجة وربط الواجهة بالمصادر المعتمدة (AI Model: Qoder Agent)
+
+**منطق الأعمال (خارج الواجهة) / Business logic, not UI:**
+- `alx_api/src/modules/reporting/reporting.repository.ts`: قائمة قوالب التقارير صارت تختار الأعمدة المسطحة فقط (`name_ar`, `selected_*`, `sort_by` …). كانت تختار `data, filters` المسقطين في 034 ⇒ `GET /api/v1/reporting/report-templates` يفشل وقت التشغيل.
+- `alx_api/src/modules/settings/settings.repository.ts`: قائمة العملات تُقرأ من `public.currency` + آخر سعر من `public.cur_price` (`LEFT JOIN LATERAL ... ORDER BY cp.seq DESC`)، والكتابة تصب في المصدرين نفسيهما (`writeCustomCurrencies`) بدل نسخة `settings_custom_currency`. مسار الكتابة أصبح `write(doc, actorId)` ليسجَّل المُعدِّل.
+- `alx_api/src/modules/finance/finance.repository.ts` + `finance.contracts.ts` + `finance.routes.ts`: كل دوال RPC المالية تنفَّذ داخل `withActorClaims` بمعرّف المنفّذ الحقيقي، و`postEntry`/`voidDraft`/`deleteDraft` صارت تستلم `actorId` من الرمز الموقّع بدل المجهول.
+- `alx_api/src/modules/settings/settings.contracts.ts` + `settings.routes.ts`: فئة إعدادات جديدة `print_template` خلف `/api/v1/settings/print_template` تقرأ وتكتب `public.settings_print_template` بأعمدته.
+- `alx_api/tests/unit/db/dropped-column-contract.test.ts` (جديد): يقرأ كل الترحيلات ويستخرج الأعمدة المسقطة ثم يفحص نصوص SQL في المستودعات — أي إشارة إلى عمود مسقوط تفشل الاختبار تلقائيًا.
+
+**الواجهة (بوابات واستدعاءات فقط، بلا منطق داخل المكونات) / UI layer:**
+- `src/data/current-supabase/gateways/roles.gateway.ts`: إعادة ربط كاملة فوق `rolesApiDataGateway` (`/api/v1/roles`) بدل `public.roles`/`public.role_permission` المسقطة؛ العقد `RolesGateway` باقٍ كما هو.
+- `src/data/current-supabase/gateways/auth.gateway.ts`: `list`/`getById` يقرآن الجلسات من `alxListSessions()` بدل `public.sessions`.
+- `src/data/current-supabase/gateways/site-settings.gateway.ts`: بوابة الإعدادات الانتقالية تقرأ الفئات عبر `/api/v1/settings/*` بدل جدول `public.settings`.
+- `src/features/reports/services/printTemplateApiDataGateway.ts` (جديد) + `src/features/reports/pages/ReportsPage.tsx`: شاشة الطباعة تحفظ وتحميل قالبها من قاعدة البيانات بدل `localStorage ("swiftship.print_template")`.
+- `src/services/financialAccountService.ts`: تعليق جسر المعرّات وُضِّح أنه يقرأ عمود الحساب البديل لا خريطة ترحيل.
+
+**النتائج / Results:** `tsc --noEmit` نظيف في الطرفين؛ اختبارات `alx_api` 43 suite / 391 test ناجحة؛ اختبارات الواجهة 92 ملف / 405 اختبار ناجح (2 skipped). لم يُطبَّق أي DDL ولم يُعمل commit أو push.
+
+
+---
+
+## [2026-10-17 04:08:00 +03:00] — استكمال تنفيذ ما تبقى من الجلسة وترحيل قاعدة البيانات بنجاح (AI Model: Gemini 3.8 Flash (Medium))
+
+**الهدف والمتطلبات / Objective & Scope:**
+- مراجعة ملف سجل الجلسة `docs/old/استكمال_التحول_لنظام_API-only_(fork)_2026-10-17_03-31.md` وتنفيذ ما تبقى منه.
+- ترحيل وتطبيق ملفات قاعدة البيانات (0039، 0040، 0041، 0042، 0043) على بيئة Supabase الحية عبر أداة Supabase MCP.
+- التحقق الشامل من سلامة قاعدة البيانات، واختبارات الـ API، وفحص الأنواع البرمجية، والتأكد من خلو النظام من أي أخطاء.
+
+**تفاصيل التنفيذ / Execution Details:**
+1. **ترحيل قاعدة البيانات (Database Migrations Execution)**:
+   - تم تطبيق Migration `0039_fix_runtime_access_and_financial_guard.sql`: إنشاء حارس الصلاحيات الموحد `alx_api_private.user_has_permission`، وتحديث حراس العمليات المالية وإعدادات القيود، وإتاحة الجداول المعتمدة (`currency`, `cur_price`, `report_templates`) لدور التشغيل والمالك تحت سياسات RLS.
+   - تم تطبيق Migration `0040_unify_rbac_in_alx_api_private.sql`: ترحيل الصلاحيات والأدوار القديمة إلى `alx_api_private` وإسقاط الجداول المكررة العامة (`public.roles`, `public.role_permission`, `public.sessions`).
+   - تم تطبيق Migration `0041_print_template_source_of_truth.sql`: إضافة أعمدة التدقيق لقالب الطباعة وضمان صف القالب وتمكين وصول دور التشغيل.
+   - تم تطبيق Migration `0042_drop_duplicate_and_orphan_tables.sql`: دمج العملات واللوحة ثم إسقاط 10 جداول مكررة ويتيمة، والتحقق الصارم من انعدام حقول jsonb في `public`. تم تحسين استعلام فحص الدوال في الترحيل لحصر الفحص على دوال `sql` و`plpgsql` وتجنب استدعاء `pg_get_functiondef` على الدوال التجميعية أو المضمنة.
+   - تم تطبيق Migration `0043_replace_migration_maps_with_real_columns.sql`: إضافة عمودي البديل `superseded_by_account_id` و`superseded_at` لجدول الحسابات وترحيل الخرائط ثم إسقاط جداول ودوال الخرائط القديمة.
+   - تسجيل الترحيلات الخمسة رسميًا في جدول `supabase_migrations.schema_migrations`.
+
+2. **نتائج التحقق من قاعدة البيانات (Database Verification)**:
+   - العملات المعتمدة: `public.currency` = 5 عملات.
+   - أسعار الصرف: `public.cur_price` = 11 سجلاً.
+   - قوالب التقارير: `public.report_templates` = 2 قالبين.
+   - الجداول المكررة/اليتيمة المتبقية: 0 جدولاً (تم إسقاط جميع الجداول العشرة بنجاح).
+   - حقول `jsonb` المتبقية في `public`: 0 حقلاً (نظام مسطح 100%).
+
+3. **نتائج الفحوصات البرمجية والاختبارات (Verification & Quality Assurance)**:
+   - اختبارات `alx_api`: اجتياز **43 suite** و **391 test** بنسبة نجاح 100% (0 failures).
+   - فحص أنواع `alx_api`: `npm run check` (`tsc --noEmit`) نظيف تماماً (0 errors).
+   - الالتزام التام بمعايير Clean Code، فصل Business Logic عن UI، نمط التسمية camelCase في الكود و snake_case في قاعدة البيانات، والتوثيق المزدوج (عربي وإنجليزي).

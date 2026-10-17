@@ -22,11 +22,12 @@ const apiClient = new ApiClient({
   maxReadRetries: 0,
 });
 
-const readRows = async (path: string): Promise<Row[]> => {
+const readRows = async (path: string, params?: Record<string, unknown>): Promise<Row[]> => {
   try {
     const response = await apiClient.get<ApiEnvelope<Row[]>>(path, {
       limit: 150,
       offset: 0,
+      ...params,
     });
     return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
@@ -51,7 +52,8 @@ export function subscribeDashboardApiData(
         readRows("/api/v1/reporting/couriers"),
         readRows("/api/v1/customers"),
         readRows("/api/v1/finance/accounts"),
-        readRows("/api/v1/reporting/activity-logs"),
+        // جلب آخر 10 سجلات نشاط فقط للوحة التحكم — fetch only latest 10 activity logs for dashboard
+        readRows("/api/v1/reporting/activity-logs", { limit: 10 }),
         readRows("/api/v1/reporting/expenses"),
       ]);
     if (disposed) return;

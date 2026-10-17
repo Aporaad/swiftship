@@ -56,7 +56,7 @@ export const UserSessionsTab: React.FC<UserSessionsTabProps> = ({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: t('متصلون الآن', 'Online Now'), value: onlineSessionsCount, color: 'emerald', Icon: MonitorCheck },
-          { label: t('إجمالي الموظفين', 'Total Staff'), value: users.length, color: 'blue', Icon: UsersIcon },
+          { label: t('إجمالي المستخدمين', 'Total Users'), value: users.length, color: 'blue', Icon: UsersIcon },
           { label: t('حسابات معطَّلة', 'Disabled'), value: users.filter(u => u.disabled).length, color: 'rose', Icon: UserX },
           { label: t('حظر مؤقت', 'Temp Banned'), value: users.filter(u => u.disabled && u.tempBanUntil).length, color: 'orange', Icon: Timer },
         ].map((stat, i) => (
