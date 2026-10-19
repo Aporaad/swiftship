@@ -1,3 +1,4 @@
+import { toDateInputValue } from '../../lib/dateUtils';
 import React, { useState, useEffect } from 'react';
 import {
   X, Edit2, DollarSign, AlertCircle,
@@ -25,6 +26,7 @@ import type { ItemCategory } from '../../services/itemCategoryService';
 import type { Settings } from '../../context/SettingsContext';
 import type { Currency } from '../../services/currencyService';
 import type { FinanceCurrency } from '../../shared/contracts/finance.contracts';
+import { toFinanceCurrencies } from '../../shared/contracts/finance.contracts';
 
 type UnknownRecord = Record<string, unknown>;
 type SourceOption = { id: string; name?: string | null; source_name?: string | null; type?: string | null };
@@ -399,7 +401,7 @@ export default function EditOrderModal({
 
   // Shipping handlers
   const addShippingRow = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateInputValue();
     setShippings([
       ...shippings,
       {
@@ -495,11 +497,7 @@ export default function EditOrderModal({
   const totalOrderYER = currencyTotals.totalPaymentCurrency;
   const valPaid = numericValue(formData.amountPaid) || 0;
   const remainingYER = totalOrderYER - valPaid;
-  const calculatorCurrencies: FinanceCurrency[] = activeCurrencies.map((currency) => ({
-    id: currency.cur_id,
-    code: currency.code,
-    isDefault: currency.is_default,
-  }));
+  const calculatorCurrencies: FinanceCurrency[] = toFinanceCurrencies(activeCurrencies);
 
   // Step Validation Logic
   const validateStep = (step: number): boolean => {

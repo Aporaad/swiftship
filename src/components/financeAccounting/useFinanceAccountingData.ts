@@ -117,9 +117,11 @@ export function useFinanceAccountingData(): FinanceAccountingData {
       error => console.error("[SalaryTab] salary_history error:", error)
     );
     const unsubE = financeAccountingDataGateway.subscribeCollection(
-      "users",
+      // كشف الرواتب مرتبط بمعرّف الموظف، لذا يُجلب الموظفون لا حسابات المستخدمين.
+      // Salary rows key on the employee id, so the staff list comes from employees, not user accounts.
+      "employees",
       setEmployees,
-      error => console.error("[SalaryTab] users error:", error)
+      error => console.error("[SalaryTab] employees error:", error)
     );
     return () => {
       unsubH();

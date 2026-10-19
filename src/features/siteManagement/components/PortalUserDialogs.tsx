@@ -36,8 +36,8 @@ export const PortalUserDialogs: React.FC<PortalUserDialogsProps> = (props) => {
               <h3 className="text-sm font-black text-white flex items-center gap-2">
                 <Users className="w-4 h-4 text-[#d4af37]" />
                 {editingPUser
-                  ? (isAr ? 'تعديل بيانات مستخدم الموقع (portal_users)' : 'Edit Portal User')
-                  : (isAr ? 'إضافة مستخدم موقع جديد (portal_users)' : 'Create New Portal User')
+                  ? (isAr ? 'تعديل بيانات مستخدم الموقع' : 'Edit Portal User')
+                  : (isAr ? 'إضافة مستخدم موقع جديد' : 'Create New Portal User')
                 }
               </h3>
               <button
@@ -145,7 +145,7 @@ export const PortalUserDialogs: React.FC<PortalUserDialogsProps> = (props) => {
               <div className="p-4 rounded-2xl bg-black/40 border border-slate-850 space-y-3">
                 <h4 className="text-xs font-black text-[#d4af37] flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5" />
-                  {isAr ? 'تفاصيل العميل الإضافية (cust_details)' : 'Customer Profile & Extra Details'}
+                  {isAr ? 'تفاصيل العميل الإضافية' : 'Customer Profile & Extra Details'}
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -323,9 +323,9 @@ export const PortalUserDialogs: React.FC<PortalUserDialogsProps> = (props) => {
               </div>
 
               {/* cust_details additional fields */}
-              {viewingPUser.customerDetails && (
+              {viewingPUser.customerDetails && (  
                 <div className="p-4 bg-black/40 rounded-2xl border border-slate-850 space-y-2">
-                  <h5 className="text-xs font-black text-[#d4af37]">{isAr ? 'التفاصيل الإضافية (cust_details)' : 'Extra Customer Details'}</h5>
+                  <h5 className="text-xs font-black text-[#d4af37]">{isAr ? 'التفاصيل الإضافية' : 'Extra Customer Details'}</h5>
                   <div className="grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-300">
                     <div><span className="text-slate-500 block text-[10px]">المدينة:</span>{viewingPUser.customerDetails.city || '—'}</div>
                     <div><span className="text-slate-500 block text-[10px]">الدولة:</span>{viewingPUser.customerDetails.country || 'اليمن'}</div>

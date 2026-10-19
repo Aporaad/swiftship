@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Bell,
@@ -10,6 +10,7 @@ import {
   RotateCw,
   Search
 } from 'lucide-react';
+import { refreshAllPollingChannels } from '../../data/http/polling-channel';
 import type { LayoutNavItem } from './types';
 
 type HeaderProps = {
@@ -53,6 +54,21 @@ export default function Header({
   pendingJobsCount,
   setIsSystemDevModalOpen
 }: HeaderProps) {
+  // زر التحديث يجلب أحدث صفوف من الـAPI عبر قنوات الجلب المشتركة، ولا يعيد تحميل الصفحة.
+  // The refresh button pulls fresh rows from the API through the shared polling channels
+  // instead of reloading the page.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshData = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refreshAllPollingChannels();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
           <header className="h-20 border-b border-[#d4af37]/10 flex items-center justify-between px-8 bg-black/60 backdrop-blur-md sticky top-0 z-15 gap-4 shrink-0 transition-all">
 
@@ -194,13 +210,14 @@ export default function Header({
                 )}
               </button>
 
-              {/* Quick Refresh Icon */}
+              {/* Quick Refresh Icon — يعيد جلب البيانات من الـAPI فقط */}
               <button
-                onClick={() => window.location.reload()}
-                className="p-2.5 rounded-xl hover:bg-slate-900 text-slate-400 hover:text-emerald-400 transition-all bg-[#08080a] border border-slate-900 hover:border-emerald-500/10"
-                title="Sync Ledger Modules"
+                onClick={handleRefreshData}
+                disabled={isRefreshing}
+                className="p-2.5 rounded-xl hover:bg-slate-900 text-slate-400 hover:text-emerald-400 transition-all bg-[#08080a] border border-slate-900 hover:border-emerald-500/10 disabled:opacity-60"
+                title={isAr ? 'تحديث البيانات من الواجهة البرمجية' : 'Refresh data from the API'}
               >
-                <RotateCw className="w-4 h-4 animate-hover" />
+                <RotateCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : 'animate-hover'}`} />
               </button>
 
               {/* System Info & Programmer Contact Button (?) */}

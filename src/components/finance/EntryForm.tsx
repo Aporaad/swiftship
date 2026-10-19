@@ -13,9 +13,10 @@
  * - لا يُعرض خيار "آجل" في وضع السندات
  */
 
+import { toDateInputValue } from '../../lib/dateUtils';
 import { useEffect, useMemo, useState } from 'react';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
-import { CurrencySelect } from '../common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from '../common/CurrencySelect';
 import { AlertTriangle, ArrowLeft, ArrowRight, Save, Trash2, Plus } from 'lucide-react';
 import {
   financialEntryService,
@@ -195,7 +196,7 @@ export default function EntryForm({
   );
 
   const [entryNumber, setEntryNumber] = useState(
-    () => editingEntry?.entryNumber || `JV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Date.now().toString().slice(-6)}`,
+    () => editingEntry?.entryNumber || `JV-${toDateInputValue().replaceAll('-', '')}-${Date.now().toString().slice(-6)}`,
   );
   const [moduleId, setModuleId] = useState(() => editingEntry?.moduleId || '');
   const [entryTypeId, setEntryTypeId] = useState(() => editingEntry?.entryTypeId || '');
@@ -628,9 +629,8 @@ export default function EntryForm({
           عملة الرأس
           <CurrencySelect
               isAr={false}
-              currencies={currencies.map(c => ({ id: c.id, code: c.code, isDefault: c.isDefault }))}
+              currencies={toCurrencySelectOptions(currencies)}
               optionValue="id"
-              showDefaultMarker
               value={String(currencyId)}
               onChange={value => setCurrencyId(Number(value))}
               className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-black text-emerald-300 transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"

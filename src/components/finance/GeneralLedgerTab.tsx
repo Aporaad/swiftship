@@ -1,5 +1,6 @@
 import React from 'react';
 import { Edit2, Eye, FileSpreadsheet, PlusCircle, Printer, Search, Trash2 } from 'lucide-react';
+import { CurrencySelect, toCurrencySelectOptions } from '../common/CurrencySelect';
 import type {
   LedgerCurrencyFilter,
   LedgerDateFilter,
@@ -147,18 +148,15 @@ export default function GeneralLedgerTab({
               {/* Currency original Filter */}
               <div>
                 <label className="block text-[9px] text-slate-500 font-extrabold uppercase mb-1">{isAr ? 'حسب عملة السداد الأصلية' : 'Billed CurrencyOriginal'}</label>
-                <select
-                  value={currencyFilter}
-                  onChange={e => setCurrencyFilter(e.target.value as any)}
+                <CurrencySelect
+                  isAr={isAr}
+                  currencies={toCurrencySelectOptions(activeCurrencies)}
+                  value={currencyFilter === 'all' ? '' : currencyFilter}
+                  onChange={value => setCurrencyFilter((value || 'all') as LedgerCurrencyFilter)}
+                  includeEmptyOption
+                  emptyOptionLabel={isAr ? 'جميع العملات' : 'All currencies'}
                   className="bg-black/40 border border-slate-850 text-white rounded-lg px-3 py-1.5 text-xs font-bold outline-none focus:border-[#d4af37] w-full cursor-pointer"
-                >
-                  <option value="all">{isAr ? 'جميع العملات' : 'All currencies'}</option>
-                  {activeCurrencies.map(c => (
-                    <option key={c.code} value={c.code}>
-                      {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* Predefined Date Ranges */}

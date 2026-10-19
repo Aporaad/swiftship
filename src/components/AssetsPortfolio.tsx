@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CurrencySelect } from './common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from './common/CurrencySelect';
 import {
   Truck, Search, Wrench, X, PlusCircle, Trash2, Calendar, DollarSign,
   Activity, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, User, ClipboardList, Package, Printer
@@ -16,7 +16,7 @@ import {
   type MaintenanceType,
 } from '../services/financeAssetsService';
 import { jsPDF } from 'jspdf';
-import { formatDate } from '../lib/dateUtils';
+import { formatDate, toDateInputValue } from '../lib/dateUtils';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 
 interface AssetsPortfolioProps {
@@ -210,7 +210,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
         type: 'Fixed',
         cost: '',
         currency: 'YER',
-        purchaseDate: new Date().toISOString().slice(0, 10),
+        purchaseDate: toDateInputValue(),
         assignedCourierId: '',
         status: 'Active',
         notes: ''
@@ -283,7 +283,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
         type: 'Preventive',
         notes: '',
         doneBy: '',
-        date: new Date().toISOString().slice(0, 10),
+        date: toDateInputValue(),
       });
     } catch (err: any) {
       console.error(err);
@@ -977,7 +977,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                   <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Billed original'}</label>
                   <CurrencySelect
                     isAr={isAr}
-                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code }))}
+                    currencies={toCurrencySelectOptions(activeCurrencies)}
                     value={newAsset.currency}
                     onChange={currency => setNewAsset(prev => ({ ...prev, currency }))}
                     className="w-full bg-black/40 border border-[#1e1e24] text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer"
@@ -1119,7 +1119,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                   <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Billed curr'}</label>
                   <CurrencySelect
                     isAr={isAr}
-                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code }))}
+                    currencies={toCurrencySelectOptions(activeCurrencies)}
                     value={newMaint.currency}
                     onChange={currency => setNewMaint(prev => ({ ...prev, currency }))}
                     className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-2 py-2 text-[10px] font-black outline-none focus:border-[#d4af37] cursor-pointer"

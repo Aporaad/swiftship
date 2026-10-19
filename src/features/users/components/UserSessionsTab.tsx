@@ -75,8 +75,8 @@ export const UserSessionsTab: React.FC<UserSessionsTabProps> = ({
         <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
         <div className="text-[10px] text-amber-300/80 font-bold leading-relaxed">
           {t(
-            'يعمل نظام إنهاء الجلسات بشكل فوري: عند النقر على "إجراء"، يُرسَل أمر إلى Supabase يُلتقط تلقائياً من المستخدم المستهدف خلال ثوانٍ ويُعيد توجيهه لصفحة تسجيل الدخول.',
-            "Session termination works in real-time: clicking an action sends a Supabase command that the target user's session picks up within seconds and redirects them to login."
+            'يعمل نظام إنهاء الجلسات بشكل فوري',
+            "Session termination works in real-time"
           )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { ApiClient } from '../../../data/http/api-client';
+import { subscribePollingChannel } from '../../../data/http/polling-channel';
 
 type ApiEnvelope<T> = { success: true; data: T };
 type ApiUser = Record<string, unknown> & { userId?: string };
@@ -137,20 +138,13 @@ export const usersApiDataGateway = {
    * Subscribe to users list with periodic refresh.
    */
   subscribe(handlers: UsersHandlers): () => void {
-    let disposed = false;
-    const refresh = async () => {
-      try {
-        const users = await readUsers();
-        if (!disposed) handlers.onData({ users });
-      } catch (error) {
-        if (!disposed) handlers.onError?.(error);
-      }
-    };
-    void refresh();
-    const interval = setInterval(() => void refresh(), 30_000);
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
+    // قناة واحدة لقائمة المستخدمين: كل شاشة مفتوحة عليها تتغذى من الطلب نفسه.
+    // One channel for the users list: every screen open on it is fed by the same request.
+    return subscribePollingChannel<UsersState>(
+      'users',
+      async () => ({ users: await readUsers() }),
+      handlers.onData,
+      handlers.onError ?? (() => undefined),
+    );
   },
 };

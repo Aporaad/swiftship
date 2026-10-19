@@ -219,7 +219,7 @@ export function OrdersPageShell(props: OrdersPageShellProps) {
             }`}
         >
           <Package className="w-4 h-4" />
-          {isAr ? '📦  الطلبات' : '📦 Orders & Invoices'}
+          {isAr ? 'الطلبات' : 'Orders & Invoices'}
           <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">
             {orders.length}
           </span>
@@ -233,7 +233,7 @@ export function OrdersPageShell(props: OrdersPageShellProps) {
             }`}
         >
           <Boxes className="w-4 h-4 text-emerald-400" />
-          {isAr ? '🧾 المنتجات' : '🧾 Products'}
+          {isAr ? 'المنتجات' : 'Products'}
           <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">{allProducts.length}</span>
         </button>
 
@@ -245,7 +245,7 @@ export function OrdersPageShell(props: OrdersPageShellProps) {
             }`}
         >
           <Truck className="w-4 h-4" />
-          {isAr ? '🚚 الشحنات' : '🚚 Shipments Management Studio'}
+          {isAr ? 'الشحنات' : 'Shipments Management Studio'}
           <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">
             {allShipments.length}
           </span>
@@ -260,7 +260,7 @@ export function OrdersPageShell(props: OrdersPageShellProps) {
               }`}
           >
             <MapPin className="w-4 h-4" />
-            {isAr ? '📍 التتبع' : '📍 Live Tracking & Telemetry'}
+            {isAr ? 'التتبع' : 'Live Tracking & Telemetry'}
           </button>
         )}
 
@@ -288,7 +288,7 @@ export function OrdersPageShell(props: OrdersPageShellProps) {
             }`}
         >
           <Package className="w-4 h-4 text-amber-400" />
-          {isAr ? '✨التغليف وفئات الشحن' : '✨ Order Options (order_option)'}
+          {isAr ? 'التغليف وفئات الشحن' : 'Order Options'}
           <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">
             {orderOptionsList.length}
           </span>

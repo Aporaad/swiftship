@@ -1,5 +1,6 @@
+import { toDateInputValue } from '../../lib/dateUtils';
 import { useMemo, useState } from 'react';
-import { CurrencySelect } from '../common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from '../common/CurrencySelect';
 import { CheckCircle2, Plus, WalletCards } from 'lucide-react';
 import { financialEntryService, type FinancialPaymentMethod } from '../../services/financialEntryService';
 import type { FinanceAccount, FinanceCurrency } from '../../shared/contracts/finance.contracts';
@@ -26,7 +27,7 @@ export default function CustodyAdvancesTab({ items, accounts, currencies, canVie
   const [recipientAccountId, setRecipientAccountId] = useState('');
   const [recipientReference, setRecipientReference] = useState('');
   const [fundingAccountId, setFundingAccountId] = useState('');
-  const [number, setNumber] = useState(() => `CUS-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Date.now().toString().slice(-5)}`);
+  const [number, setNumber] = useState(() => `CUS-${toDateInputValue().replaceAll('-', '')}-${Date.now().toString().slice(-5)}`);
   const [amount, setAmount] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [recipientType, setRecipientType] = useState<RecipientType>('courier');
@@ -118,7 +119,7 @@ export default function CustodyAdvancesTab({ items, accounts, currencies, canVie
       {recipientType === 'other' && <label className="text-xs font-bold text-slate-300 md:col-span-2">الحساب المالي للطرف الخارجي<select value={recipientAccountId} onChange={(e) => selectRecipientAccount(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-white"><option value="">اختر حساب الطرف الخارجي</option>{accounts.filter((account) => account.isPosting && account.isActive).map((account) => <option key={account.id} value={account.id}>{account.id} — {account.nameAr} ({account.currencyCode})</option>)}</select></label>}
       <label className="text-xs font-bold text-slate-300">عملة العهدة<CurrencySelect
         isAr={false}
-        currencies={currencies.map(currency => ({ id: currency.id, code: currency.code }))}
+        currencies={toCurrencySelectOptions(currencies)}
         optionValue="id"
         value={String(currencyNo)}
         onChange={value => setCurrencyNo(Number(value))}

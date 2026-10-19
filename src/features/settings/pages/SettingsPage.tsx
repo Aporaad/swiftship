@@ -1004,7 +1004,9 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 historyEntries.map((entry, idx) => {
-                  const isLatest = idx === historyEntries.length - 1;
+                  // القائمة تصل من الأحدث إلى الأقدم، فأول صف هو آخر تسلسل لا آخرهُ.
+                  // The list arrives newest-first, so the newest sequence is the first row, not the last.
+                  const isLatest = idx === 0;
                   return (
                     <div
                       key={entry.id || entry.seq}

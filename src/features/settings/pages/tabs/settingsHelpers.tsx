@@ -35,6 +35,17 @@ export const FieldTextarea = ({
   />
 );
 
+export const FieldSelect = ({
+  disabled = false,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+  <select
+    {...props}
+    disabled={disabled}
+    className={`w-full bg-black/50 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start transition ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-700'} ${props.className || ''}`}
+  />
+);
+
 export const SectionCard = ({
   title,
   icon: Icon,

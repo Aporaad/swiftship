@@ -1,5 +1,5 @@
 import type { Currency } from '../services/currencyService';
-import { CurrencySelect } from './common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from './common/CurrencySelect';
 
 export const ORDER_DEFAULT_CURRENCY_VALUE = '';
 
@@ -18,14 +18,7 @@ export function AutoEntryCurrencySelector({
 }) {
   return <CurrencySelect
     isAr={isAr}
-    currencies={currencies.map((currency) => ({
-      id: currency.cur_id,
-      code: currency.code,
-      nameAr: currency.main_nameAR || currency.main_name_ar,
-      nameEn: currency.main_nameEn || currency.main_name_en,
-      symbol: currency.symbol,
-      flag: currency.flag,
-    }))}
+    currencies={toCurrencySelectOptions(currencies)}
     value={value || ORDER_DEFAULT_CURRENCY_VALUE}
     onChange={(selected) => onChange(selected || undefined)}
     includeEmptyOption

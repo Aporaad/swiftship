@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { CurrencySelect } from './common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from './common/CurrencySelect';
 import {
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2,
   Search, Scale, X, Activity, ShieldCheck, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer,
@@ -17,6 +17,14 @@ import {
   updateFinancialAccount,
 } from '../services/financialAccountAdmin';
 import { useExchangeRates } from '../hooks/useExchangeRates';
+
+/** احتياط عند فراغ جدول العملات: رموز معروفة بأسمائها ورموزها حتى لا تظهر القائمة فارغة أو مجرّدة.
+ *  Fallback while the currency table is empty: known codes with their names and symbols. */
+const CURRENCY_NAME_FALLBACK = [
+  { code: 'YER', nameAr: 'ريال يمني', nameEn: 'Yemeni Rial', symbol: '﷼' },
+  { code: 'SAR', nameAr: 'ريال سعودي', nameEn: 'Saudi Riyal', symbol: 'ر.س' },
+  { code: 'USD', nameAr: 'دولار أمريكي', nameEn: 'US Dollar', symbol: '$' },
+];
 
 interface ChartOfAccountsProps {
   isAr: boolean;
@@ -857,7 +865,7 @@ export default function ChartOfAccounts({
                   <label className="block text-[9px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Currency'}</label>
                   <CurrencySelect
                     isAr={isAr}
-                    currencies={(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => ({ id: c.code, code: c.code, nameAr: (c as any).main_nameAR }))}
+                    currencies={toCurrencySelectOptions(activeCurrencies.length > 0 ? activeCurrencies : CURRENCY_NAME_FALLBACK)}
                     value={newAccount.currency}
                     onChange={currency => setNewAccount(p => ({ ...p, currency }))}
                     className="w-full bg-black/40 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]"
@@ -930,7 +938,7 @@ export default function ChartOfAccounts({
                   <label className="block text-[9px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Currency'}</label>
                   <CurrencySelect
                     isAr={isAr}
-                    currencies={(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => ({ id: c.code, code: c.code, nameAr: (c as any).main_nameAR }))}
+                    currencies={toCurrencySelectOptions(activeCurrencies.length > 0 ? activeCurrencies : CURRENCY_NAME_FALLBACK)}
                     value={newAccount.currency}
                     onChange={currency => setNewAccount(p => ({ ...p, currency }))}
                     className="w-full bg-black/40 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]"

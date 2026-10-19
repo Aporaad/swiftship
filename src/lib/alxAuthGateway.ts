@@ -27,6 +27,8 @@ export interface AlxLoginResult {
   accessToken: string;
   refreshToken: string;
   sessionId: string;
+  /** نهاية نافذة الخمول المحسوبة من الإعدادات (ISO). Idle deadline computed from settings (ISO). */
+  sessionExpiresAt?: string;
   user: {
     userId: string;
     username: string;
@@ -71,8 +73,13 @@ export async function alxLogin(
     throw err;
   }
 
-  // تخزين الـ Tokens آمناً في sessionStorage
-  storeTokens(result.data.accessToken, result.data.refreshToken, result.data.sessionId);
+  // تخزين الـ Tokens آمناً في sessionStorage مع موعد انتهاء الخمول من السيرفر
+  storeTokens(
+    result.data.accessToken,
+    result.data.refreshToken,
+    result.data.sessionId,
+    result.data.sessionExpiresAt,
+  );
 
   return result.data;
 }

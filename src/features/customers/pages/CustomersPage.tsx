@@ -1003,6 +1003,9 @@ export default function CustomersPage() {
         isAr={isAr}
         onConfirm={async () => {
           await customersApiDataGateway.deleteCustomer(deletePinConfig.entityId);
+          // القائمة تُسحب من قناة جلب دورية: تُحذف الصفوفة محلياً حتى لا يبقى ظاهرًا بعد الحذف الحقيقي.
+          // The list refreshes on a polling cycle, so the row is dropped locally and cannot look undeleted.
+          setCustomers((current) => current.filter((customer) => customer.id !== deletePinConfig.entityId));
           notificationService.notify({
             title: isAr ? 'تم الحذف' : 'Customer Deleted',
             message: isAr ? `تم حذف العميل ${deletePinConfig.entityName} بنجاح` : `Customer ${deletePinConfig.entityName} deleted successfully`,

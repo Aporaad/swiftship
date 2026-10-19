@@ -6,15 +6,9 @@ import { staffApiDataGateway } from '../../features/staff/services/staffApiDataG
 import { usersApiDataGateway } from '../../features/users/services/usersApiDataGateway';
 import { notificationService } from '../../services/notificationService';
 import LocationMapPickerModal from '../common/LocationMapPickerModal';
+import { CurrencySelect, toCurrencySelectOptions } from '../common/CurrencySelect';
+import { useExchangeRates } from '../../hooks/useExchangeRates';
 import { validatePasswordFields } from '../../utils/passwordUtils';
-
-
-
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CUSTOMER CREATE MODAL
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function EmployeeCreateModal({
   isOpen,
@@ -23,6 +17,7 @@ export function EmployeeCreateModal({
   settings,
   onCreated
 }: SharedProps & { onCreated: (employee: any) => void }) {
+  const { activeCurrencies } = useExchangeRates();
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'system'>('basic');
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -288,11 +283,14 @@ export function EmployeeCreateModal({
                   </FormField>
 
                   <FormField label={isAr ? 'عملة صرف الراتب' : 'Salary Currency'}>
-                    <select value={formData.currency} onChange={(e) => setFormData({ ...formData, currency: e.target.value })} className={inputClass}>
-                      <option value="YER">ريال يمني (YER)</option>
-                      <option value="SAR">ريال سعودي (SAR)</option>
-                      <option value="USD">دولار أمريكي (USD)</option>
-                    </select>
+                    <CurrencySelect
+                      isAr={isAr}
+                      currencies={toCurrencySelectOptions(activeCurrencies)}
+                      value={formData.currency}
+                      onChange={(currency) => setFormData({ ...formData, currency })}
+                      className={inputClass}
+                      data-testid="employee-salary-currency"
+                    />
                   </FormField>
                 </div>
               </div>

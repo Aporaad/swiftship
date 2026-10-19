@@ -19,6 +19,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { settingsCurrenciesApiGateway } from '../data/http/settings-currencies-api.gateway';
 import type { ApiCurrencyDto } from '../data/http/settings-currencies-api.gateway';
+import { SESSION_STATUS_EVENT } from '../data/http/session-events';
+import { setDisplayTimeZone } from '../lib/dateUtils';
 import { translations, Language, TranslationKey } from '../translations';
 
 // ── تعريف نوع المستخدم الحالي (يُجلب من sessionStorage)
@@ -50,6 +52,11 @@ export interface Settings {
   systemLogo?: string;
   orderPrefix: string;
   orderStartNumber: number;
+
+  // منطقة الزمن / Display time zone
+  // قيمة فارغة = زمن جهاز الموظف؛ وأي قيمة أخرى توحّد عرض الجميع على نفس المنطقة.
+  // Empty means "use the operator's device zone"; a value forces that zone everywhere.
+  timezone?: string;
 
   // هوية الشركة / Company Identity
   companyName: string;
@@ -136,6 +143,7 @@ const defaultSettings: Settings = {
   systemLogo: '',
   orderPrefix: 'ALX',
   orderStartNumber: 1001,
+  timezone: '',
   companyName: 'الكس-تراك',
   companyPhone: '',
   companyEmail: '',
@@ -331,7 +339,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   /**
    * التحميل الأولي عند بدء التطبيق
    * Initial load on app start
+   * الهوية عامة، أما الإعدادات والعملات فتتطلب جلسة؛ طلبها قبل الدخول يُرجع 401 ويترك الواجهة بالقيم الافتراضية.
+   * Branding is public, but settings/currencies need a session — calling them before login 401s and leaves the UI on defaults.
    */
+  const loadAuthenticated = useCallback(async () => {
+    if (!getCurrentUserId()) return;
+    await Promise.allSettled([fetchGlobalSettings(), fetchCurrencies(), fetchUserSettings()]);
+  }, [fetchGlobalSettings, fetchCurrencies, fetchUserSettings]);
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       // انتهاء المهلة: استخدام الإعدادات الافتراضية
@@ -340,12 +355,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }, 6000);
 
-    Promise.allSettled([
-      fetchBrand(),
-      fetchGlobalSettings(),
-      fetchCurrencies(),
-      fetchUserSettings(),
-    ]).finally(() => {
+    Promise.allSettled([fetchBrand(), loadAuthenticated()]).finally(() => {
       clearTimeout(timeout);
       setLoading(false);
     });
@@ -354,20 +364,40 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
+   * إعادة الجلب فور نجاح تسجيل الدخول بدل انتظار الجولة الدورية.
+   * Refetch right after sign-in instead of waiting for the periodic poll.
+   */
+  useEffect(() => {
+    const onSessionStatus = (event: Event) => {
+      const status = (event as CustomEvent<{ status?: string }>).detail?.status;
+      if (status === 'authenticated') {
+        void loadAuthenticated();
+        return;
+      }
+      if (status === 'unauthenticated' || status === 'expired') {
+        // إعدادات المستخدم تخص الجلسة السابقة؛ تُصفَّر والعامّة تبقى للعرض.
+        // User settings belong to the previous session; clear them, keep the global copy for display.
+        setUserSettings({});
+      }
+    };
+    window.addEventListener(SESSION_STATUS_EVENT, onSessionStatus);
+    return () => window.removeEventListener(SESSION_STATUS_EVENT, onSessionStatus);
+  }, [loadAuthenticated]);
+
+  /**
    * إعادة تحميل دورية للإعدادات والعملات (بدلاً من Supabase realtime)
    * Periodic refresh for settings and currencies (replacing Supabase realtime)
    */
   useEffect(() => {
     if (loading) return;
     pollingTimerRef.current = setInterval(() => {
-      void fetchGlobalSettings();
-      void fetchCurrencies();
+      void loadAuthenticated();
     }, SETTINGS_POLL_INTERVAL_MS);
 
     return () => {
       if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
     };
-  }, [loading, fetchGlobalSettings, fetchCurrencies]);
+  }, [loading, loadAuthenticated]);
 
   /**
    * تأثيرات تغيير الإعدادات (اتجاه الصفحة، الثيم، حجم الخط، عنوان الصفحة)
@@ -399,7 +429,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
     // عنوان الصفحة / Page title
     document.title = settings.systemName || settings.companyName || 'SwiftShip';
-  }, [settings.language, settings.theme, settings.fontSize, settings.systemName, settings.companyName]);
+
+    // منطقة عرض التوقيت: تُضبط قبل رسم أي موعد حتى لا تختلف الشاشة عن قاعدة البيانات.
+    // Display time zone is set before any timestamp renders, so screens match the stored instant.
+    setDisplayTimeZone(settings.timezone);
+  }, [settings.language, settings.theme, settings.fontSize, settings.systemName, settings.companyName, settings.timezone]);
 
   /**
    * تحديث الإعدادات وإرسالها إلى API

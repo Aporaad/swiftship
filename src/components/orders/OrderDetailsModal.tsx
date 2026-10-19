@@ -1,3 +1,4 @@
+import { formatDateTimeLocalized, toDateInputValue } from '../../lib/dateUtils';
 import React, { useRef, useEffect } from 'react';
 import { X, Truck, Printer } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -188,7 +189,7 @@ export default function OrderDetailsModal({
                 </div>
                 <div className="text-slate-400 font-bold">
                   {isAr ? 'تاريخ المعاملة:' : 'Invoice Date:'}{' '}
-                  <span className="text-white font-mono">{safeToDate(selectedOrder.createdAt)?.toLocaleString(isAr ? 'ar-EG' : 'en-US') || '—'}</span>
+                  <span className="text-white font-mono">{formatDateTimeLocalized(safeToDate(selectedOrder.createdAt), isAr) || '—'}</span>
                 </div>
               </div>
             </div>
@@ -458,7 +459,7 @@ export default function OrderDetailsModal({
                 if (lastDispatch) {
                   const d = new Date(lastDispatch);
                   d.setDate(d.getDate() + totalExpected);
-                  yemenArrivalDate = d.toISOString().split('T')[0];
+                  yemenArrivalDate = toDateInputValue(d);
                 }
                 return (
                   <div className="p-4 bg-slate-950/60 border border-[#d4af37]/20 rounded-2xl text-[11px] font-bold mt-2">

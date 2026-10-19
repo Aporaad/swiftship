@@ -4,6 +4,7 @@ import type { Settings } from '../../../../context/SettingsContext';
 import type { TranslationKey } from '../../../../translations';
 import type { Currency } from '../../../../services/currencyService';
 import { SectionCard, FieldLabel, FieldInput, ToggleSwitch } from './settingsHelpers';
+import { CurrencySelect, toCurrencySelectOptions } from '../../../../components/common/CurrencySelect';
 
 export interface NewCurrencyFormValues {
   code: string;
@@ -68,17 +69,18 @@ export function CurrencySettingsTab({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="md:col-span-2">
                 <FieldLabel locked={!canEditRates}>{t('mainCurrency')}</FieldLabel>
-                <select disabled={!canEditRates} value={localSettings.currency}
-                  onChange={e => {
-                    const selected = dbCurrencies.find(c => c.code === e.target.value);
-                    setLocalSettings({ ...localSettings, currency: e.target.value, currencySymbol: selected?.symbol || localSettings.currencySymbol });
+                {/* قائمة العملة الموحّدة: الرمز والاسم ووسم الافتراضية، والمعطّلة لا تُعرض. */}
+                <CurrencySelect
+                  isAr={isAr}
+                  currencies={toCurrencySelectOptions(dbCurrencies)}
+                  value={localSettings.currency}
+                  disabled={!canEditRates}
+                  onChange={(code) => {
+                    const selected = dbCurrencies.find((currency) => currency.code === code);
+                    setLocalSettings({ ...localSettings, currency: code, currencySymbol: selected?.symbol || localSettings.currencySymbol });
                   }}
-                  className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3.5 text-xs font-bold outline-none focus:border-[#d4af37]/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {dbCurrencies.filter(c => c.isActive).map(c => (
-                    <option key={c.cur_id} value={c.code}>{c.flag} {c.main_nameAR} ({c.code})</option>
-                  ))}
-                </select>
+                  className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3.5 text-xs font-bold outline-none focus:border-[#d4af37]/60 disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+                />
               </div>
               <div>
                 <FieldLabel locked={!canEditRates}>{t('currencySymbol')}</FieldLabel>

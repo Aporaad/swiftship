@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { Search, Edit2, X, Plus, Trash2, MapPin, ShieldAlert, RefreshCw, Crown, Globe, Truck, Phone, Landmark } from 'lucide-react';
+import { Search, Edit2, X, Plus, Trash2, MapPin, ShieldAlert, RefreshCw, Crown, Globe, Truck, Phone, Landmark, ReceiptText } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';
 import { notificationService } from '../../../services/notificationService';
@@ -8,7 +8,27 @@ import { activityLogService } from '../../../services/activityLogService';
 import ConfirmModal from '../../../components/ConfirmModal';
 import { financialAccountService } from '../../../services/financialAccountService';
 import { ShippingCompanyCreateModal, SourceCreateModal } from '../../../components/entities/EntityCreateModals';
+import EntityStatementModal from '../components/EntityStatementModal';
 import { sourcesApiDataGateway } from '../services/sourcesApiDataGateway';
+
+/**
+ * خلية الحساب المالي: تعرض رمز الحساب واسمه القادمين من الـAPI بدل نص «ينشأ عند الحفظ».
+ * Financial-account cell: renders the account code and name returned by the API instead of the placeholder text.
+ */
+function AccountCell({ row, isAr }: { row: any; isAr: boolean }) {
+  const code = row.financialAccountCode || row.accountCode;
+  if (!code) return <span className="text-[10px] text-amber-400">{isAr ? 'ينشأ عند الحفظ' : 'Created on save'}</span>;
+  const name = isAr ? (row.accountNameAr || row.accountNameEn) : (row.accountNameEn || row.accountNameAr);
+  return (
+    <div className="flex flex-col gap-1 text-start">
+      <span className="inline-flex w-max items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 font-mono text-[10px] font-black text-emerald-300">
+        <Landmark className="h-3 w-3" />
+        {code}
+      </span>
+      {name && <span className="text-[9px] text-slate-500 truncate max-w-[160px]">{name}</span>}
+    </div>
+  );
+}
 
 export default function SourcesPage() {
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -76,6 +96,10 @@ export default function SourcesPage() {
     address: '',
     notes: ''
   });
+
+  // نافذة كشف الحساب: تحمل العنصر الذي تم النقر عليه من أيٍّ من الجدولين.
+  // The statement modal holds whichever source or carrier row was clicked.
+  const [statementTarget, setStatementTarget] = useState<{ type: 'source' | 'shipping_company'; id: string; name: string } | null>(null);
 
   const financialCurrency = settings.currency || settings.defaultOrderCurrency || 'YER';
   const ensureFinancialAccount = async (
@@ -435,12 +459,15 @@ export default function SourcesPage() {
                         ) : '—'}
                       </td>
                       <td className="p-4 text-slate-400 text-[11px] text-start max-w-xs truncate">{source.notes || '—'}</td>
-                      <td className="p-4 text-start">
-                        {source.financialAccountCode || source.accountCode ? (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 font-mono text-[10px] font-black text-emerald-300"><Landmark className="h-3 w-3" />{source.financialAccountCode || source.accountCode}</span>
-                        ) : <span className="text-[10px] text-amber-400">{isAr ? 'ينشأ عند الحفظ' : 'Created on save'}</span>}
-                      </td>
+                      <td className="p-4 text-start"><AccountCell row={source} isAr={isAr} /></td>
                       <td className="p-4 text-left flex justify-end gap-2">
+                        <button
+                          onClick={() => setStatementTarget({ type: 'source', id: source.id, name: source.source_name || source.name || '' })}
+                          className="text-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30 border border-emerald-900/40 p-2 rounded-xl transition duration-300"
+                          title={isAr ? 'كشف حساب المصدر' : 'Source statement'}
+                        >
+                          <ReceiptText className="w-4 h-4" />
+                        </button>
                         {canEditSources && (
                           <button 
                             onClick={() => handleOpenEdit(source)} 
@@ -548,12 +575,15 @@ export default function SourcesPage() {
                       <td className="p-4 text-slate-400 text-[11px] text-start max-w-xs truncate">
                         {company.notes || '—'}
                       </td>
-                      <td className="p-4 text-start">
-                        {company.financialAccountCode || company.accountCode ? (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 font-mono text-[10px] font-black text-emerald-300"><Landmark className="h-3 w-3" />{company.financialAccountCode || company.accountCode}</span>
-                        ) : <span className="text-[10px] text-amber-400">{isAr ? 'ينشأ عند الحفظ' : 'Created on save'}</span>}
-                      </td>
+                      <td className="p-4 text-start"><AccountCell row={company} isAr={isAr} /></td>
                       <td className="p-4 text-left flex justify-end gap-2">
+                        <button
+                          onClick={() => setStatementTarget({ type: 'shipping_company', id: company.id, name: company.name || '' })}
+                          className="text-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30 border border-emerald-900/40 p-2 rounded-xl transition duration-300"
+                          title={isAr ? 'كشف حساب شركة الشحن' : 'Carrier statement'}
+                        >
+                          <ReceiptText className="w-4 h-4" />
+                        </button>
                         {canEditShipping && (
                           <button 
                             onClick={() => handleOpenEditShipping(company)} 
@@ -824,6 +854,14 @@ export default function SourcesPage() {
           </form>
         </div>
       )}
+
+      <EntityStatementModal
+        isOpen={Boolean(statementTarget)}
+        onClose={() => setStatementTarget(null)}
+        entityType={statementTarget?.type ?? 'source'}
+        entityId={statementTarget?.id ?? ''}
+        entityName={statementTarget?.name ?? ''}
+      />
 
       <ConfirmModal 
         isOpen={confirmConfig.isOpen}

@@ -1,4 +1,5 @@
 import { ApiClient } from '../../../data/http/api-client';
+import { subscribePollingChannel } from '../../../data/http/polling-channel';
 
 type ApiEnvelope<T> = { success: true; data: T };
 type CourierRow = Record<string, unknown> & { id: string };
@@ -58,20 +59,13 @@ export const couriersApiDataGateway = {
   },
 
   subscribe(handlers: CouriersHandlers): () => void {
-    let disposed = false;
-    const refresh = async () => {
-      try {
-        const couriers = await this.getCouriers();
-        if (!disposed) handlers.onData(couriers);
-      } catch (error) {
-        if (!disposed) handlers.onError?.(error);
-      }
-    };
-    void refresh();
-    const interval = setInterval(() => void refresh(), 30_000);
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
+    // شاشة المندوبين وكشف حسابهم وغيرهما تشترك في نفس القائمة: طلب واحد لكل دورة جلب لا طلب لكل شاشة.
+    // Every screen that lists couriers shares one channel: one request per cycle instead of one per screen.
+    return subscribePollingChannel<CourierRow[]>(
+      'couriers',
+      () => this.getCouriers(),
+      handlers.onData,
+      handlers.onError ?? (() => undefined),
+    );
   },
 };

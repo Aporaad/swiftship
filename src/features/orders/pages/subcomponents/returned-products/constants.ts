@@ -1,3 +1,4 @@
+import { toDateInputValue } from '../../../../../lib/dateUtils';
 import type { ReturnFormData } from './types';
 
 /** نمط حقل الإدخال المشترك - Shared input field style */
@@ -23,7 +24,7 @@ export const createEmptyReturnForm = (): ReturnFormData => ({
   is_insured: false,
   insurance_refund: 0,
   notes: '',
-  returned_at: new Date().toISOString().split('T')[0],
+  returned_at: toDateInputValue(),
   processed_by: '',
   processed_at: undefined,
 });

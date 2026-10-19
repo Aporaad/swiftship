@@ -10,7 +10,9 @@ import PaymentVouchersTab from '../../../components/finance/PaymentVouchersTab';
 import AccountMovementTab, { type FinanceAccountTransactionRow } from '../../../components/finance/AccountMovementTab';
 import CustodyAdvancesTab, { type CustodyAdvanceRow } from '../../../components/finance/CustodyAdvancesTab';
 import EntrySettingsTab from '../../../components/finance/EntrySettingsTab';
+import PortalPaymentReviewTab from '../../../components/finance/PortalPaymentReviewTab';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../shared/contracts/finance.contracts';
+import { toFinanceCurrencies } from '../../../shared/contracts/finance.contracts';
 import type { FinanceEntryRow, FinancePaymentDetailRow } from '../../../components/finance/EntryWorkspaceTab';
 import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { isRecord, readString, type UnknownRecord } from '../../../shared/contracts/unknown.contracts';
@@ -54,7 +56,7 @@ const stringValue = (value: unknown): string => typeof value === 'string' ? valu
 const optionalString = (value: unknown): string | undefined => typeof value === 'string' && value.length > 0 ? value : undefined;
 const booleanValue = (value: unknown): boolean => value === true;
 
-type TabId = 'general' | 'compound' | 'temporary' | 'movement' | 'receipt' | 'payment' | 'custody' | 'settings';
+type TabId = 'general' | 'compound' | 'temporary' | 'movement' | 'receipt' | 'payment' | 'portal_payment_review' | 'custody' | 'settings';
 
 const can = (isAdmin: boolean, hasPermission: (key: string) => boolean, precise: string, legacy: string) =>
   isAdmin || hasPermission(precise) || hasPermission(legacy);
@@ -103,11 +105,9 @@ export default function FinanceEntriesPage() {
       }
       setUsersMap(uMap);
 
-      const loadedCurrencies = unwrapList(currencyResult).map((item) => ({
-        id: numberValue(item.currencyId ?? item.curId ?? item.cur_id ?? item.id),
-        code: stringValue(item.code),
-        isDefault: booleanValue(item.isDefault ?? item.is_default),
-      }));
+      // الأسماء والرموز وحالة التفعيل تصل للقوائم عبر المُحوِّل الموحّد: بدونها تُعرض المعطّلة والكود وحده.
+      // Names, symbols and the active flag reach the pickers through the shared mapper.
+      const loadedCurrencies = toFinanceCurrencies(unwrapList(currencyResult));
       const currencyCodeById = new Map(loadedCurrencies.map((item) => [item.id, item.code]));
       setCurrencies(loadedCurrencies);
 
@@ -241,6 +241,7 @@ export default function FinanceEntriesPage() {
     { id: 'temporary' as const, label: 'القيودالمؤقتة', icon: FileClock, access: can(isAdmin, hasPermission, 'view_temporary_entries', 'view_finance') },
     { id: 'receipt' as const, label: 'سندات القبض', icon: ReceiptText, access: can(isAdmin, hasPermission, 'view_receipt_vouchers', 'view_finance') },
     { id: 'payment' as const, label: 'سندات الصرف', icon: CreditCard, access: can(isAdmin, hasPermission, 'view_payment_vouchers', 'view_finance') },
+    { id: 'portal_payment_review' as const, label: 'طلبات سداد البوابة', icon: ReceiptText, access: can(isAdmin, hasPermission, 'view_portal_payment_requests', 'view_finance') },
     { id: 'custody' as const, label: 'العهد والسلف', icon: Wallet, access: can(isAdmin, hasPermission, 'view_custody_advances', 'view_custody') },
     { id: 'movement' as const, label: 'حركة الحسابات', icon: Landmark, access: can(isAdmin, hasPermission, 'view_account_movements', 'view_financial_accounts') },
     { id: 'settings' as const, label: 'إعدادات القيود', icon: Settings2, access: can(isAdmin, hasPermission, 'view_entry_settings', 'view_auto_entries') },
@@ -288,6 +289,7 @@ export default function FinanceEntriesPage() {
     {activeTab === 'temporary' && <TemporaryEntriesTab {...common} {...entryPermissions('temporary_entries', 'view_finance')} />}
     {activeTab === 'receipt'   && <ReceiptVouchersTab  {...common} {...entryPermissions('receipt_vouchers',  'view_finance')} />}
     {activeTab === 'payment'   && <PaymentVouchersTab  {...common} {...entryPermissions('payment_vouchers',  'view_payment_vouchers')} />}
+    {activeTab === 'portal_payment_review' && <PortalPaymentReviewTab isAr canReview={isAdmin || hasPermission('view_finance')} />}
     {activeTab === 'movement'  && <AccountMovementTab  lines={transactions} entries={entries} accounts={accounts} currencies={currencies} canView={can(isAdmin, hasPermission, 'view_account_movements', 'view_financial_accounts')} canExport={can(isAdmin, hasPermission, 'export_account_movements', 'view_financial_accounts')} canPrint={can(isAdmin, hasPermission, 'print_account_movements', 'view_financial_accounts')} />}
     {activeTab === 'custody'   && <CustodyAdvancesTab  items={custodies} accounts={accounts} currencies={currencies} canView={can(isAdmin, hasPermission, 'view_custody_advances', 'view_custody')} canCreate={can(isAdmin, hasPermission, 'create_custody_advances', 'create_finance')} canSettle={can(isAdmin, hasPermission, 'settle_custody_advances', 'edit_finance')} createdByUid={createdByUid} onChanged={refresh} />}
     {activeTab === 'settings'  && <EntrySettingsTab    modules={modules} entryTypes={entryTypes} canView={can(isAdmin, hasPermission, 'view_entry_settings', 'view_auto_entries')} canCreate={can(isAdmin, hasPermission, 'create_entry_settings', 'add_auto_entries')} canEdit={can(isAdmin, hasPermission, 'edit_entry_settings', 'edit_auto_entries')} canDelete={can(isAdmin, hasPermission, 'delete_entry_settings', 'delete_auto_entries')} onChanged={refresh} />}

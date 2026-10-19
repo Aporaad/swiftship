@@ -15,6 +15,7 @@
  * against the live transaction history.
  */
 
+import { toDateInputValue } from '../lib/dateUtils';
 import { currencyService } from './currencyService';
 import { activityLogService } from './activityLogService';
 import { accountingHierarchyService } from './accountingHierarchyService';
@@ -368,7 +369,7 @@ class FinancialAccountService {
       entryNumber:
         (transaction as any).entryNumber ||
         transaction.automationKey ||
-        `JV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Math.floor(100000 + Math.random() * 900000)}`,
+        `JV-${toDateInputValue().replaceAll('-', '')}-${Math.floor(100000 + Math.random() * 900000)}`,
       createdAt: transaction.date || Date.now(),
       description: transaction.description || "",
       attachments: transaction.attachments || [],

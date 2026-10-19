@@ -15,8 +15,10 @@ import {
   UserCheck
 } from 'lucide-react';
 import { amountInWords } from '../../lib/numberToWords';
+import { CurrencySelect, toCurrencySelectOptions } from '../common/CurrencySelect';
 import { financialAccountService } from '../../services/financialAccountService';
 import FinancialCalculatorModal from '../finance/FinancialCalculatorModal';
+import { toFinanceCurrencies } from '../../shared/contracts/finance.contracts';
 import type { OrderRecord, PaymentAllocation, PaymentFormData } from '../../features/orders/types';
 
 type CollectionMethod = PaymentFormData['method'];
@@ -320,21 +322,18 @@ export default function PaymentModal({
                   <label className="block text-slate-300 font-black">
                     {isAr ? 'عملة التحصيل' : 'Payment Currency'}
                   </label>
-                  <select
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={toCurrencySelectOptions(safeActiveCurrencies)}
                     value={paymentCurrency}
-                    onChange={(e) => {
+                    onChange={(value) => {
                       if (typeof setPaymentFormData === 'function') {
-                        setPaymentFormData({ ...safeFormData, paymentCurrency: e.target.value });
+                        setPaymentFormData({ ...safeFormData, paymentCurrency: value });
                       }
                     }}
                     className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-sm font-black text-amber-400 outline-none focus:border-amber-500"
-                  >
-                    {safeActiveCurrencies.map((c) => (
-                      <option key={c?.code || Math.random()} value={c?.code || 'YER'}>
-                        {c?.code} {c?.nameAr ? `(${c.nameAr})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    data-testid="payment-currency"
+                  />
                 </div>
               </div>
 
@@ -604,11 +603,7 @@ export default function PaymentModal({
         isOpen={isCalculatorOpen}
         onClose={() => setIsCalculatorOpen(false)}
         initialTab={calculatorTab}
-        currencies={safeActiveCurrencies.map((c) => ({
-          id: c?.cur_id || c?.id || 1,
-          code: c?.code || 'YER',
-          isDefault: c?.isDefault
-        }))}
+        currencies={toFinanceCurrencies(safeActiveCurrencies)}
       />
     </>
   );

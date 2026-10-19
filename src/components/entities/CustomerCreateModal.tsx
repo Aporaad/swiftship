@@ -221,8 +221,8 @@ export function CustomerCreateModal({
               type="button"
               onClick={() => setActiveTab('basic')}
               className={`px-4 py-2 rounded-xl text-xs font-black transition ${activeTab === 'basic'
-                  ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20'
-                  : 'bg-slate-800/80 text-slate-300 hover:text-white'
+                ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20'
+                : 'bg-slate-800/80 text-slate-300 hover:text-white'
                 }`}
             >
               {isAr ? '📋 البيانات الأساسية' : 'Basic Info'}
@@ -232,11 +232,11 @@ export function CustomerCreateModal({
               type="button"
               onClick={() => setActiveTab('details')}
               className={`px-4 py-2 rounded-xl text-xs font-black transition ${activeTab === 'details'
-                  ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20'
-                  : 'bg-slate-800/80 text-slate-300 hover:text-white'
+                ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20'
+                : 'bg-slate-800/80 text-slate-300 hover:text-white'
                 }`}
             >
-              {isAr ? '🗺️ التفاصيل والموقع (cust_details)' : 'Extra Details & GPS'}
+              {isAr ? '🗺️ التفاصيل والموقع' : 'Extra Details & GPS'}
             </button>
 
             {createPortalUser && (
@@ -244,11 +244,11 @@ export function CustomerCreateModal({
                 type="button"
                 onClick={() => setActiveTab('portal')}
                 className={`px-4 py-2 rounded-xl text-xs font-black transition animate-pulse ${activeTab === 'portal'
-                    ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20'
-                    : 'bg-amber-500/20 text-[#d4af37] border border-amber-500/30 hover:bg-amber-500/30'
+                  ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20'
+                  : 'bg-amber-500/20 text-[#d4af37] border border-amber-500/30 hover:bg-amber-500/30'
                   }`}
               >
-                {isAr ? '🌐 مستخدم الموقع (portal_users)' : 'Portal User'}
+                {isAr ? '🌐 مستخدم الموقع ' : 'Portal User'}
               </button>
             )}
           </div>
@@ -263,8 +263,8 @@ export function CustomerCreateModal({
               else if (activeTab === 'portal') setActiveTab('basic');
             }}
             className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 border ${createPortalUser
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/10'
-                : 'bg-amber-500/10 text-[#d4af37] border-amber-500/30 hover:bg-amber-500/20'
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/10'
+              : 'bg-amber-500/10 text-[#d4af37] border-amber-500/30 hover:bg-amber-500/20'
               }`}
           >
             <Globe className="w-4 h-4" />
@@ -373,7 +373,7 @@ export function CustomerCreateModal({
               <div className="p-5 rounded-2xl bg-black/40 border border-amber-500/30 space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <h3 className="text-xs font-black text-[#d4af37] uppercase tracking-wider flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" /> {isAr ? 'بيانات حساب تسجيل الدخول للموقع (portal_users)' : 'Website Credentials'}
+                    <ShieldCheck className="w-4 h-4" /> {isAr ? 'بيانات حساب تسجيل الدخول للموقع' : 'Website Credentials'}
                   </h3>
                   <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-full">
                     {isAr ? 'ربط تلقائي بالعميل' : 'Auto Linked'}

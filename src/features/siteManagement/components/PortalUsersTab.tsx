@@ -36,11 +36,11 @@ export const PortalUsersTab: React.FC<PortalUsersTabProps> = (props) => {
               <div>
                 <h3 className="text-base font-black text-white flex items-center gap-2">
                   <Users className="w-5 h-5 text-[#d4af37]" />
-                  {isAr ? 'إدارة وحوكمة مستخدمي الموقع الإلكتروني (portal_users)' : 'Website Portal Users Management'}
+                  {isAr ? 'إدارة  مستخدمي الموقع الإلكتروني' : 'Website Portal Users Management'}
                 </h3>
                 <p className="text-xs text-slate-400 font-bold mt-1">
                   {isAr
-                    ? 'عرض وتعديل وتفعيل كافة الحسابات المسجلة بالموقع، وربطها بالعملاء والتفاصيل الإضافية (cust_details)'
+                    ? 'عرض وتعديل وتفعيل كافة الحسابات المسجلة بالموقع، وربطها بالعملاء والتفاصيل الإضافية'
                     : 'Manage, edit, disable, or authorize portal user accounts and their linked customer profiles'
                   }
                 </p>
@@ -111,7 +111,7 @@ export const PortalUsersTab: React.FC<PortalUsersTabProps> = (props) => {
                     <th className="p-4">{isAr ? 'البريد والهاتف' : 'Contact'}</th>
                     <th className="p-4">{isAr ? 'الدور والاعتماد' : 'Role & Approval'}</th>
                     <th className="p-4">{isAr ? 'حالة الحساب' : 'Status'}</th>
-                    <th className="p-4">{isAr ? 'التفاصيل الإضافية (cust_details)' : 'Extra Details'}</th>
+                    <th className="p-4">{isAr ? 'التفاصيل الإضافية' : 'Extra Details'}</th>
                     <th className="p-4 text-left">{isAr ? 'الإجراءات' : 'Actions'}</th>
                   </tr>
                 </thead>
@@ -161,14 +161,13 @@ export const PortalUsersTab: React.FC<PortalUsersTabProps> = (props) => {
                             <div className="flex flex-col gap-1 w-max">
                               <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30">
                                 {role === 'client' || role === 'customer' ? '👤 عميل موقع' :
-                                 role === 'courier' ? '🚚 مندوب توصيل' :
-                                 role === 'supplier' ? '🏭 مورد مصانع' : '👑 مدير'}
+                                  role === 'courier' ? '🚚 مندوب توصيل' :
+                                    role === 'supplier' ? '🏭 مورد مصانع' : '👑 مدير'}
                               </span>
-                              <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black ${
-                                appStatus === 'approved' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40' :
+                              <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black ${appStatus === 'approved' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40' :
                                 appStatus === 'pending_approval' ? 'bg-amber-950/40 text-amber-400 border border-amber-800/40' :
-                                'bg-rose-950/40 text-rose-400 border border-rose-800/40'
-                              }`}>
+                                  'bg-rose-950/40 text-rose-400 border border-rose-800/40'
+                                }`}>
                                 {appStatus === 'approved' ? '✓ معتمد' : appStatus === 'pending_approval' ? '⏳ قيد المراجعة' : '✕ مرفوض'}
                               </span>
                             </div>
@@ -177,11 +176,10 @@ export const PortalUsersTab: React.FC<PortalUsersTabProps> = (props) => {
                           <td className="p-4">
                             <button
                               onClick={() => handleTogglePUserDisabled(user)}
-                              className={`px-3 py-1 rounded-xl text-xs font-black border transition-all cursor-pointer ${
-                                isDisabled
-                                  ? 'bg-rose-950/40 text-rose-400 border-rose-800/40 hover:bg-rose-900/60'
-                                  : 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40 hover:bg-emerald-900/60'
-                              }`}
+                              className={`px-3 py-1 rounded-xl text-xs font-black border transition-all cursor-pointer ${isDisabled
+                                ? 'bg-rose-950/40 text-rose-400 border-rose-800/40 hover:bg-rose-900/60'
+                                : 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40 hover:bg-emerald-900/60'
+                                }`}
                             >
                               {isDisabled ? '🔴 معطل' : '🟢 نشط'}
                             </button>

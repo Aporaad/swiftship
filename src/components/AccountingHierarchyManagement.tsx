@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CurrencySelect } from './common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from './common/CurrencySelect';
 import { CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, Download, Edit3, FileSpreadsheet, FileText, FolderPlus, Layers3, Loader2, Maximize2, Minimize2, Plus, Printer, Search, Settings2, Trash2, Upload, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { accountingHierarchyService, hierarchyCodeRules, type HierarchyCodeKind } from '../services/accountingHierarchyService';
@@ -636,7 +636,7 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
         <label className="text-xs text-slate-400">{isAr ? 'الكود المحاسبي' : 'Accounting code'}<input value={form.accountCode} onChange={(event) => setForm({ ...form, accountCode: event.target.value })} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2.5 text-white" />{codeHint && <span className="mt-1 block text-[10px] text-slate-500">{isAr ? `الصيغة المتوقعة: ${codeHint}` : `Expected format: ${codeHint}`}</span>}</label>
         <label className="text-xs text-slate-400">{isAr ? 'الاسم العربي' : 'Arabic name'}<input value={form.accNameAr} onChange={(event) => setForm({ ...form, accNameAr: event.target.value })} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2.5 text-white" /></label><label className="text-xs text-slate-400">{isAr ? 'الاسم الإنجليزي' : 'English name'}<input value={form.accNameEn} onChange={(event) => setForm({ ...form, accNameEn: event.target.value })} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2.5 text-white" /></label><label className="text-xs text-slate-400">{isAr ? 'العملة المرجعية' : 'Currency reference'}<CurrencySelect
           isAr={isAr}
-          currencies={activeCurrencies.map(currency => ({ id: currency.cur_id, code: currency.code, nameAr: currency.main_nameAR || currency.main_name_ar, nameEn: currency.main_nameEn || currency.main_name_en }))}
+          currencies={toCurrencySelectOptions(activeCurrencies)}
           optionValue="id"
           includeEmptyOption
           emptyOptionLabel={isAr ? 'عملة النظام الافتراضية' : 'System default currency'}

@@ -8,6 +8,7 @@
  * 3. المزامنة والتحديث المستمر والآلي لسعر صرف العملة من `cur_price`.
  */
 
+import { toDateInputValue, toDateTimeInputValue } from '../../../lib/dateUtils';
 import { useEffect, useMemo, useState } from 'react';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../shared/contracts/finance.contracts';
 import { AlertTriangle, Plus, Save, Trash2, ArrowRight, ArrowLeft, Calendar, User, Calculator } from 'lucide-react';
@@ -126,13 +127,13 @@ export default function CompoundEntryForm({
 
   // ── رقم القيد المركب محمي وغير قابل للتعديل (Read-only) ──
   const [entryNumber] = useState(
-    () => editingEntry?.entryNumber || `JV-CMP-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Date.now().toString().slice(-5)}`
+    () => editingEntry?.entryNumber || `JV-CMP-${toDateInputValue().replaceAll('-', '')}-${Date.now().toString().slice(-5)}`
   );
 
   const [effectiveAt, setEffectiveAt] = useState<string>(
     () => editingEntry?.effectiveAt
-      ? new Date(editingEntry.effectiveAt).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16)
+      ? toDateTimeInputValue(editingEntry.effectiveAt)
+      : toDateTimeInputValue()
   );
 
   const [moduleId, setModuleId] = useState(() => editingEntry?.moduleId || '');
@@ -270,7 +271,22 @@ export default function CompoundEntryForm({
       const systemCurId = systemCurrency?.id || 1;
       const systemCurCode = systemCurrency?.code || 'YER';
 
-      const payloadLines: FinancialEntryLineInput[] = calculatedLines.map((l) => {
+      // مرجع كل ساق يُحلّ من cur_price لا من تسلسل ثابت: سطر عملة النظام لا يحتاج سجلًا،
+      // وكل سطر آخر يأخذ آخر تسلسل موثق لعملة حسابه — أو تسلسلًا جديدًا يُدرج الآن
+      // إن كان السعر المكتوب في الحقل مخالفًا لآخر سعر. هذا يمنع تثبيت الساق على أول تسلسل.
+      // Each leg resolves its reference from cur_price instead of a constant: a system-currency
+      // line needs no record, every other line takes the latest documented sequence for its own
+      // account currency — or a newly appended one when the typed price differs. This is what
+      // stops a leg from being stamped with the first sequence.
+      const priceReferences = await Promise.all(
+        calculatedLines.map(async (l) => {
+          const lineAccount = accounts.find((a) => a.id === l.accountId);
+          if (!lineAccount || lineAccount.curNo === systemCurId) return null;
+          return currencyService.resolvePriceReference(lineAccount.curNo, asNumber(l.exchangeRate) || undefined);
+        }),
+      );
+
+      const payloadLines: FinancialEntryLineInput[] = calculatedLines.map((l, lineIndex) => {
         const acc = accounts.find((a) => a.id === l.accountId)!;
         const isDebit = l.transType === 'Debit';
         const autoPrefix = isDebit ? 'له مقابل:' : 'عليه مقابل:';
@@ -295,7 +311,10 @@ export default function CompoundEntryForm({
           amountOriginal: lineAmountOriginal,
           amountOriginalText: lineAmountOriginalText,
           currencyOriginalNo: systemCurId,
-          currencyPrice: { id: 1, seq: 1 },
+          // المرجع الحقيقي لآخر تسلسل مسجل، للساقين بعملة الحساب كما يفعل نموذج السند.
+          // The real latest sequence reference, on both leg keys like the voucher form does.
+          currencyPrice: priceReferences[lineIndex]?.reference,
+          accountCurrencyPrice: priceReferences[lineIndex]?.reference,
           description: fullLineDesc,
         };
       });

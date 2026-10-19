@@ -11,6 +11,10 @@ import type { AuthLoginProfileDto, CurrentUserDto, SessionState } from '../../da
 import type { AuthGateway } from '../../data/contracts/auth.gateway';
 import { currentSupabaseAuthGateway } from '../../data/current-supabase/gateways/auth.gateway';
 import { alxApiAuthGateway } from '../../data/http/alx-api-auth.gateway';
+import { startSilentSessionRenewal, stopSilentSessionRenewal } from '../../data/http/session-keepalive';
+import { SESSION_TERMINATED_EVENT, emitSessionStatus } from '../../data/http/session-events';
+import { stopAllPollingChannels } from '../../data/http/polling-channel';
+import { ALX_API_URL } from '../../lib/alxApiClient';
 
 const isAlxApiConfigured = Boolean(
   (typeof window !== 'undefined' && (import.meta as any).env?.VITE_ALX_API_URL) ||
@@ -70,6 +74,35 @@ export function AuthSessionProvider({
       unsubscribe();
     };
   }, [gateway]);
+
+  const isAlxApiSession = state.status === 'authenticated' && gateway === alxApiAuthGateway;
+  useEffect(() => {
+    if (!isAlxApiSession) {
+      stopSilentSessionRenewal();
+      return;
+    }
+    startSilentSessionRenewal(ALX_API_URL);
+    return () => stopSilentSessionRenewal();
+  }, [isAlxApiSession]);
+
+  // بثّ حالة الجلسة لبقية المزوّدات (الإعدادات/العملات) دون ربط السياقات ببعضها.
+  // Broadcast session status so other providers (settings/currencies) can react without being coupled to auth.
+  useEffect(() => {
+    emitSessionStatus(state.status);
+  }, [state.status]);
+
+  // إنهاء قاطع من طبقة البيانات: تنخفض الحالة إلى expired فيصير user=null، فيوقف التجديد ويحوَّل المسار إلى /login بلا تحديث للصفحة.
+  // A decisive termination from the data layer: state drops to expired so user becomes null, which halts renewal and reroutes to /login without a page refresh.
+  // يوقف الجلب الدوري أولًا حتى لا تُرسل الشاشات طلبات فاشلة بعد انتهاء الجلسة.
+  // Polling stops first so open screens cannot fire doomed requests after the session ended.
+  useEffect(() => {
+    const onTerminated = () => {
+      stopAllPollingChannels();
+      setState({ status: 'expired' });
+    };
+    window.addEventListener(SESSION_TERMINATED_EVENT, onTerminated);
+    return () => window.removeEventListener(SESSION_TERMINATED_EVENT, onTerminated);
+  }, []);
 
   const authenticate = useCallback(
     (identifier: string, password: string) => gateway.authenticate(identifier, password),

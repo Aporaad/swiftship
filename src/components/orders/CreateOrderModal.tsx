@@ -18,6 +18,7 @@ import type { Currency } from '../../services/currencyService';
 import type { Settings } from '../../context/SettingsContext';
 import OrderPartyPicker from './OrderPartyPicker';
 import FinancialCalculatorModal from '../finance/FinancialCalculatorModal';
+import { toFinanceCurrencies } from '../../shared/contracts/finance.contracts';
 import ProductPickerModal, { SystemProductRecord } from './ProductPickerModal';
 import CreateOrderStep1 from '../../features/orders/components/create-order-modal/CreateOrderStep1';
 import CreateOrderStep2 from '../../features/orders/components/create-order-modal/CreateOrderStep2';
@@ -609,11 +610,7 @@ export default function CreateOrderModal(
               <FinancialCalculatorModal
                 isOpen={isCalcOpen}
                 onClose={() => setIsCalcOpen(false)}
-                currencies={activeCurrencies.map((currency) => ({
-                  id: currency.cur_id,
-                  code: currency.code,
-                  isDefault: currency.is_default,
-                }))}
+                currencies={toFinanceCurrencies(activeCurrencies)}
               />
             </div>
           </div>

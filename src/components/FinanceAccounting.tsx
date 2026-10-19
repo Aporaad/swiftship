@@ -11,7 +11,7 @@ interface FinanceEntryState {
   [key: string]: unknown;
 }
 
-import { CurrencySelect } from './common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from './common/CurrencySelect';
 import {
   FileText, Search, CreditCard, ShieldAlert, CheckCircle, Wallet, ArrowUpRight,
   ArrowDownLeft, HelpCircle, User, Truck, Calendar, Printer, Download, Star, ExternalLink,
@@ -42,7 +42,6 @@ import LedgerEntryPreview from './finance/LedgerEntryPreview';
 import SalaryVoucherModal from './finance/SalaryVoucherModal';
 import ManualJournalAdjustmentModal from './finance/ManualJournalAdjustmentModal';
 import CustomerFifoPaymentModal from './finance/CustomerFifoPaymentModal';
-import PortalPaymentReviewTab from './finance/PortalPaymentReviewTab';
 import { useFinanceAccountingData } from './financeAccounting/useFinanceAccountingData';
 import { useFinanceAccountingSelectors } from './financeAccounting/useFinanceAccountingSelectors';
 import { createFinanceAccountingMainEntryActions } from './financeAccounting/financeAccountingMainEntryActions';
@@ -513,9 +512,6 @@ return (
           setIsDeletePinModalOpen={setIsDeletePinModalOpen}
         />
       )}
-      {accountingTab === 'portal_payment_review' && (
-        <PortalPaymentReviewTab isAr={isAr} canReview={role === 'Admin' || hasPermission('view_finance')} />
-      )}
       {/* RENDER TAB 2: INDIVIDUAL COURIER CUSTODY & DELIVERIES AUDIT */}
       {accountingTab === 'courier_audit' && (
         <CourierAuditTab
@@ -757,7 +753,7 @@ return (
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العملة' : 'Currency'}</label>
                   <CurrencySelect
                     isAr={isAr}
-                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code }))}
+                    currencies={toCurrencySelectOptions(activeCurrencies)}
                     value={editJournalData.currencyOriginal}
                     onChange={currency => setEditJournalData(prev => ({ ...prev, currencyOriginal: currency }))}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer font-mono bg-[#121215]"

@@ -1,7 +1,9 @@
 import React from 'react';
-import { Settings2, Upload, Image, RefreshCw, Building, X } from 'lucide-react';
+import { Settings2, Upload, Image, RefreshCw, Building, X, Clock } from 'lucide-react';
 import type { Settings } from '../../../../context/SettingsContext';
 import type { TranslationKey } from '../../../../translations';
+import { formatDateTime } from '../../../../lib/dateUtils';
+import { DEVICE_TIME_ZONE, TIME_ZONE_OPTIONS, isSupportedTimeZone, resolveTimeZone, timeZoneOffsetLabel } from '../../../../lib/timezones';
 import { SectionCard, FieldLabel, FieldInput, FieldTextarea } from './settingsHelpers';
 
 interface GeneralSettingsTabProps {
@@ -25,6 +27,13 @@ export function GeneralSettingsTab({
   handleResetCounter,
   t,
 }: GeneralSettingsTabProps) {
+  // منطقة مخزّنة خارج القائمة تبقى ظاهرة حتى لا يقلبها الحفظ بصمت إلى زمن الجهاز.
+  // A stored zone that is not in the list stays visible so saving cannot silently drop it.
+  const storedZone = (settings.timezone ?? '').trim();
+  const zoneChoices = !storedZone || TIME_ZONE_OPTIONS.some(option => option.value === storedZone) || !isSupportedTimeZone(storedZone)
+    ? TIME_ZONE_OPTIONS
+    : [...TIME_ZONE_OPTIONS, { value: storedZone, labelAr: storedZone, labelEn: storedZone }];
+
   return (
     <div className="space-y-5 animate-fade-slide-in">
       <SectionCard title={isAr ? 'هوية النظام والعلامة التجارية' : 'System Branding & Identity'} icon={Settings2}>
@@ -55,6 +64,26 @@ export function GeneralSettingsTab({
           <div>
             <FieldLabel>{t('orderStartNumber')}</FieldLabel>
             <FieldInput type="number" disabled={!canEditGeneral} value={settings.orderStartNumber ?? 1001} onChange={event => setSettings({ ...settings, orderStartNumber: parseInt(event.target.value) || 1001 })} min={1} className="font-mono" dir="ltr" />
+          </div>
+          <div className="md:col-span-2">
+            <FieldLabel>{isAr ? 'منطقة التوقيت لعرض المواعيد' : 'Display time zone'}</FieldLabel>
+            <select
+              disabled={!canEditGeneral}
+              value={settings.timezone || DEVICE_TIME_ZONE}
+              onChange={event => setSettings({ ...settings, timezone: event.target.value })}
+              dir="ltr"
+              className="w-full bg-black/50 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start transition hover:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value={DEVICE_TIME_ZONE}>{isAr ? `زمن جهاز الموظف (${timeZoneOffsetLabel(DEVICE_TIME_ZONE)})` : `Operator device time (${timeZoneOffsetLabel(DEVICE_TIME_ZONE)})`}</option>
+              {zoneChoices.map(option => (
+                <option key={option.value} value={option.value}>{isAr ? option.labelAr : option.labelEn} — {timeZoneOffsetLabel(option.value)}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-slate-500 mt-1.5 font-bold" dir="ltr">
+              <Clock className="w-3 h-3 inline-block ml-1 -mt-0.5" />
+              {resolveTimeZone(settings.timezone)} · {timeZoneOffsetLabel(settings.timezone)} · {formatDateTime(new Date())}
+              {isAr ? ' — المواعيد تُعرض بهذه المنطقة بعد الحفظ' : ' — timestamps render in this zone after saving'}
+            </p>
           </div>
           <div className="md:col-span-2">
             <button type="button" disabled={!canEditGeneral} onClick={handleResetCounter} className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 hover:border-amber-500/40 px-4 py-2.5 rounded-xl text-xs font-black transition disabled:opacity-50 disabled:cursor-not-allowed"><RefreshCw className="w-4 h-4" />{t('resetCounter')}</button>

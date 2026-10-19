@@ -1,3 +1,4 @@
+import { toDateInputValue } from '../../../lib/dateUtils';
 import React, { useState, useEffect, useRef, useMemo } from 'react'; // استيراد التفاعلات لاجل عرض البيانات 
 import { useLocation } from 'react-router-dom'; // استيراد الموقع لاجل عرض البيانات  
 import CopyToClipboard from '../../../components/CopyToClipboard'; // استيراد نسخ النص لاجل النسخ 
@@ -292,7 +293,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     shippingCategoryId: '',
     shippingCategoryName: '',
     shippingCategoryPrice: 0,
-    shippingDate: new Date().toISOString().split('T')[0],
+    shippingDate: toDateInputValue(),
     shippingDuration: '15',
     expectedArrival: '',
     deliveryDate: '',
@@ -399,7 +400,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
           shippingCompany: 'Aramex',
           shippingSource: '',
           shippingDestination: '',
-          shippingDate: new Date().toISOString().split('T')[0],
+          shippingDate: toDateInputValue(),
           shippingDuration: String(
             formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
               formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
@@ -413,7 +414,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
                   (settings.defaultShippingDuration ?? 15);
             const d = new Date();
             d.setDate(d.getDate() + dur);
-            return d.toISOString().split('T')[0];
+            return toDateInputValue(d);
           })(),
           deliveryDate: '',
           shippingCost: 0,
@@ -849,14 +850,14 @@ export default function OrdersPage() { // دالة عرض الطلبات
   // Shipping details handling
   // اضافه صف جديد الى بيانات الشحنات
   const addShippingRow = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateInputValue();
     const defaultDuration =
       formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
         formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
           (settings.defaultAppDuration ?? 10);
     const arrivalDate = new Date();
     arrivalDate.setDate(arrivalDate.getDate() + defaultDuration);
-    const expectedArrival = arrivalDate.toISOString().split('T')[0];
+    const expectedArrival = toDateInputValue(arrivalDate);
     setShippings([...shippings, {
       id: Math.random().toString(36).substr(2, 9),
       shippingType: 'بري',
@@ -925,7 +926,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
             if (sh.shippingDate) {
               const dateObj = new Date(sh.shippingDate);
               dateObj.setDate(dateObj.getDate() + defaultDuration);
-              expected = dateObj.toISOString().split('T')[0];
+              expected = toDateInputValue(dateObj);
             }
             return {
               ...sh,
@@ -981,7 +982,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
   };
   // اضافه صف جديد الى بيانات الشحنات
   const addUpdateShippingRow = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateInputValue();
     setUpdateShippings([...updateShippings, {
       id: Math.random().toString(36).substr(2, 9),
       shippingType: 'بري',
@@ -1211,7 +1212,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
       shippingCategoryId: '',
       shippingCategoryName: '',
       shippingCategoryPrice: 0,
-      shippingDate: new Date().toISOString().split('T')[0],
+      shippingDate: toDateInputValue(),
       shippingDuration: '15',
       expectedArrival: '',
       deliveryDate: '',

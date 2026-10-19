@@ -254,6 +254,36 @@ class CurrencyService {
   }
 
   /**
+   * مرجع سعر الصرف الذي يثبَّت على الساق المحاسبية: آخر تسلسل مسجل فعليًا،
+   * أو تسلسل جديد يُضاف فورًا إذا كان السعر الذي أدخله المستخدم مختلفًا عن آخر سعر موثق.
+   * لا يُعاد أبداً مرجع وهمي؛ السعر غير الموثق يوقف الحفظ بدل أن يُثبَّت على تسلسل قديم.
+   *
+   * The reference stamped on an accounting leg: the genuinely latest sequence, or a freshly
+   * appended sequence when the operator's price differs from the latest documented one.
+   * Never returns a placeholder — an undocumented price aborts the save instead of silently
+   * reusing an old sequence.
+   */
+  async resolvePriceReference(
+    curNo: number,
+    operatorPrice?: number,
+  ): Promise<{ price: number; reference: { id: number; seq: number } }> {
+    const latest = await this.getLatestPriceReference(curNo);
+    const override = Number(operatorPrice);
+    const mustAppend = Number.isFinite(override) && override > 0 && latest?.price !== override;
+    if (mustAppend) {
+      const added = await this.addExchangeRatePrice(curNo, override, '');
+      if (!added.success) {
+        throw new Error(added.error || 'EXCHANGE_RATE_SAVE_FAILED');
+      }
+    }
+    const resolved = mustAppend ? await this.getLatestPriceReference(curNo) : latest;
+    if (!resolved) {
+      throw new Error('EXCHANGE_RATE_NOT_DOCUMENTED');
+    }
+    return resolved;
+  }
+
+  /**
    * سعر الصرف الساري في تاريخ محدد (آخر سعر <= التاريخ) مع مرجعه.
    * Effective rate at a given date (latest rate <= date) with its reference.
    */

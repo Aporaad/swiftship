@@ -1,4 +1,5 @@
 import { ApiClient } from '../../../data/http/api-client';
+import { subscribePollingChannel } from '../../../data/http/polling-channel';
 
 type ApiEnvelope<T> = { success: true; data: T };
 type CustomerApiRow = Record<string, unknown> & { customerId?: string; id?: string };
@@ -53,24 +54,13 @@ export const customersApiDataGateway = {
   },
 
   subscribe(handlers: CustomersHandlers): () => void {
-    let disposed = false;
-
-    const refresh = async () => {
-      try {
-        const customers = await this.getCustomers();
-        if (!disposed) {
-          handlers.onData(customers);
-        }
-      } catch (error) {
-        if (!disposed) handlers.onError?.(error);
-      }
-    };
-
-    void refresh();
-    const interval = setInterval(() => void refresh(), 30_000);
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
+    // قائمة العملاء تُجلب مرة واحدة لكل دورة ولو فتحتها عدة شاشات في نفس الوقت.
+    // The customer list loads once per cycle even when several screens are open at the same time.
+    return subscribePollingChannel<CustomerApiRow[]>(
+      'customers',
+      () => this.getCustomers(),
+      handlers.onData,
+      handlers.onError ?? (() => undefined),
+    );
   },
 };

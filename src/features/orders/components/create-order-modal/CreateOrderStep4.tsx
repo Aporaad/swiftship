@@ -1,5 +1,5 @@
 import React from 'react';
-import { CurrencySelect } from '../../../../components/common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from '../../../../components/common/CurrencySelect';
 import { X, Search, UserPlus, CreditCard, DollarSign, AlertCircle, Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft, User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes } from 'lucide-react';
 import { amountInWords, paidAmountInWords, currencyNameAr, currencyNameEn, numberToWordsAr, numberToWordsEn } from '../../../../lib/numberToWords';
 
@@ -372,7 +372,7 @@ export default function CreateOrderStep4(props: CreateOrderStep4Props) {
                         <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
                         <CurrencySelect
                         isAr={isAr}
-                        currencies={activeCurrencies.map((c: CurrencyOption) => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
+                        currencies={toCurrencySelectOptions(activeCurrencies)}
                         value={formData.currency}
                         onChange={newCurrency => {
                           const rateOrder = getCurrencyRate(orderCurrency);

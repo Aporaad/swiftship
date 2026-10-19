@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../shared/contracts/finance.contracts';
-import { CurrencySelect } from '../../common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from '../../common/CurrencySelect';
 import { AlertTriangle, Save, ArrowRight, ArrowLeft, Wallet, Building, User, Calendar, Calculator } from 'lucide-react';
 import {
   financialEntryService,
@@ -526,9 +526,8 @@ export default function VoucherEntryForm({
             <div className="flex items-center gap-2 mt-1.5">
               <CurrencySelect
               isAr={false}
-              currencies={currencies.map(c => ({ id: c.id, code: c.code, isDefault: c.isDefault }))}
+              currencies={toCurrencySelectOptions(currencies)}
               optionValue="id"
-              showDefaultMarker
               value={String(currencyId)}
               onChange={value => setCurrencyId(Number(value))}
               className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-black text-emerald-300 transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"

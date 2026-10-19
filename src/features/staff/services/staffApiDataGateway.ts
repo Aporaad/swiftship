@@ -1,4 +1,5 @@
 import { ApiClient } from "../../../data/http/api-client";
+import { subscribePollingChannel } from "../../../data/http/polling-channel";
 
 type ApiEnvelope<T> = {
   success: true;
@@ -151,33 +152,26 @@ export const staffApiDataGateway = {
   },
 
   subscribe(handlers: StaffHandlers, options: StaffReadOptions = {}): () => void {
-    let disposed = false;
-    const refresh = async () => {
-      try {
+    // مفتاح القناة يحمل ما طُلب من الشاشات: تتشارك الشاشات ذات الطلبات نفسها الجلب ولا تكرار بين الصفحات.
+    // The channel key carries the requested slices, so screens asking for the same data share one load.
+    return subscribePollingChannel<Parameters<StaffHandlers['onData']>[0]>(
+      `staff:${options.includeEmployees === false ? 'no-emp;' : ''}${options.includeOrders === false ? 'no-orders;' : ''}${options.includeAccounts === false ? 'no-accounts;' : ''}`,
+      async () => {
         const [couriers, employees, orders, accounts] = await Promise.all([
           readRows("/api/v1/reporting/couriers"),
           options.includeEmployees === false ? Promise.resolve([]) : readRows("/api/v1/reporting/employees"),
           options.includeOrders === false ? Promise.resolve([]) : readRows("/api/v1/orders"),
           options.includeAccounts === false ? Promise.resolve([]) : readRows("/api/v1/finance/accounts"),
         ]);
-        if (!disposed) {
-          handlers.onData({
-            couriers: couriers.map(normalizeCourier),
-            employees: employees.map(normalizeEmployee),
-            orders: orders.map(row => normalize(row, "orderId")),
-            accounts: accounts.map(row => normalize(row, "accountId")),
-          });
-        }
-      } catch (error) {
-        if (!disposed) handlers.onError?.(error);
-      }
-    };
-
-    void refresh();
-    const interval = setInterval(() => void refresh(), 30_000);
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
+        return {
+          couriers: couriers.map(normalizeCourier),
+          employees: employees.map(normalizeEmployee),
+          orders: orders.map(row => normalize(row, "orderId")),
+          accounts: accounts.map(row => normalize(row, "accountId")),
+        };
+      },
+      handlers.onData,
+      handlers.onError ?? (() => undefined),
+    );
   },
 };

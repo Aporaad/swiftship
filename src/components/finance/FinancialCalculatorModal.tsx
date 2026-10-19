@@ -7,7 +7,7 @@
  * 2. مصارفة (Currency Exchange): تحويل مبالغ بين جميع عملات النظام المتاحة بناءً على أسعار الصرف المعتمدة.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Calculator,
   ArrowRightLeft,
@@ -23,6 +23,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { currencyService, type ExchangeRates } from '../../services/currencyService';
+import { CurrencySelect, toCurrencySelectOptions } from '../common/CurrencySelect';
 import type { FinanceCurrency } from '../../shared/contracts/finance.contracts';
 import { asyncState, runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
 
@@ -238,18 +239,19 @@ export default function FinancialCalculatorModal({
     setToCurrencyCode(temp);
   };
 
+  /**
+   * عملات المصارفة تُبنى من سجلات العملات نفسها: المعطّلة لا تُعرض أبدًا، ولا يُعرض إلا ما يملك سعرًا.
+   * Exchange options come from the currency records: disabled ones are never listed and only rated codes convert.
+   */
+  const currencyOptions = useMemo(() => {
+    const records = toCurrencySelectOptions(currencies);
+    const ratedCodes = new Set(Object.keys(exchangeRates));
+    const usable = ratedCodes.size > 0 ? records.filter((record) => ratedCodes.has(record.code)) : records;
+    // احتياط عند غياب سجلات العملات: الأكواد القادمة من الأسعار تُعرض بلا أسماء ولا معطّلة معروفة.
+    return usable.length > 0 ? usable : Object.keys(exchangeRates).map((code) => ({ id: code, code }));
+  }, [currencies, exchangeRates]);
+
   if (!isOpen) return null;
-
-  const getAvailableCurrencyCodes = (): string[] => {
-    const fromRates = Object.keys(exchangeRates || {});
-    if (fromRates.length > 0) return fromRates;
-    if (Array.isArray(currencies) && currencies.length > 0) {
-      return currencies.map((c) => c?.code).filter(Boolean) as string[];
-    }
-    return ['YER', 'SAR', 'USD'];
-  };
-
-  const availableCodes = getAvailableCurrencyCodes();
 
   // كم وحدة أساس تساوي 1 وحدة من العملة
   const rateFromBase = exchangeRates[fromCurrencyCode] ?? 1;
@@ -512,17 +514,13 @@ export default function FinancialCalculatorModal({
                 <label className="block text-xs font-bold text-slate-400">
                   من عملة
                 </label>
-                <select
+                <CurrencySelect
+                  isAr
+                  currencies={currencyOptions}
                   value={fromCurrencyCode}
-                  onChange={(e) => setFromCurrencyCode(e.target.value)}
+                  onChange={setFromCurrencyCode}
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs font-black text-white focus:border-[#d4af37]/60 focus:outline-none"
-                >
-                  {availableCodes.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* زر التبديل ⇄ */}
@@ -542,17 +540,13 @@ export default function FinancialCalculatorModal({
                 <label className="block text-xs font-bold text-slate-400">
                   إلى عملة
                 </label>
-                <select
+                <CurrencySelect
+                  isAr
+                  currencies={currencyOptions}
                   value={toCurrencyCode}
-                  onChange={(e) => setToCurrencyCode(e.target.value)}
+                  onChange={setToCurrencyCode}
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs font-black text-white focus:border-[#d4af37]/60 focus:outline-none"
-                >
-                  {availableCodes.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             </div>
 

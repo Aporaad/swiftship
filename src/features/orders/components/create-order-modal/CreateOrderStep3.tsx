@@ -1,3 +1,4 @@
+import { toDateInputValue } from '../../../../lib/dateUtils';
 import React from 'react';
 import { X, Search, UserPlus, CreditCard, DollarSign, AlertCircle, Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft, User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes } from 'lucide-react';
 
@@ -212,7 +213,7 @@ export default function CreateOrderStep3(props: CreateOrderStep3Props) {
                                   if (!isNaN(days)) {
                                     const dateObj = new Date(newDate);
                                     dateObj.setDate(dateObj.getDate() + days);
-                                    expected = dateObj.toISOString().split('T')[0];
+                                    expected = toDateInputValue(dateObj);
                                   }
                                 }
                                 updateShippingRow(idx, 'shippingDate', newDate);

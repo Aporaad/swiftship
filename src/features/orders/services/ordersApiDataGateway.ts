@@ -1,4 +1,5 @@
 import { ApiClient, ApiClientError } from '../../../data/http/api-client';
+import { subscribePollingChannel } from '../../../data/http/polling-channel';
 import { orderDetailPayloadKeys, type OrderDetailPayload } from '../../../data/dtos/orders.dto';
 import type { OrdersFeatureApi, OrdersCollectionRepository, OrdersWritePayload } from '../api';
 import type { OrderFeatureRecord, ShipmentFeatureRecord } from '../types';
@@ -51,14 +52,14 @@ function makeApiCollection<T extends ApiRow>(config: ApiCollectionConfig): Order
   const pathFor = (id: string) => `${config.writePath ?? config.readPath}/${encodeURIComponent(id)}`;
   return {
     subscribe(onData: (snapshot: { records: readonly T[] }) => void, onError?: (error: unknown) => void) {
-      let disposed = false;
-      const refresh = async () => {
-        try { const records = await list(); if (!disposed) onData({ records }); }
-        catch (error) { if (!disposed) onError?.(error); }
-      };
-      void refresh();
-      const timer = setInterval(() => void refresh(), 30_000);
-      return () => { disposed = true; clearInterval(timer); };
+      // كل صفحة تعرض نفس المجموعة تشترك في قناة واحدة: لا طلب مكرر لكل مكوّن.
+      // Screens showing the same collection share one channel: no duplicated request per component.
+      return subscribePollingChannel<{ records: readonly T[] }>(
+        `collection:${config.readPath}`,
+        async () => ({ records: await list() }),
+        onData,
+        onError ?? (() => undefined),
+      );
     },
     list,
     async get(id) {
@@ -126,16 +127,15 @@ const settings = {
   // Auto-entry rules are read in full: a 100-row page silently dropped rules past the cap,
   // which stops automatic vouchers without any error; 1000 is the API's maximum page size.
   subscribe(onData: (record: ApiRow | null) => void, onError?: (error: unknown) => void) {
-    let disposed = false;
-    const refresh = async () => {
-      try {
+    return subscribePollingChannel<ApiRow | null>(
+      'auto-entry-rules',
+      async () => {
         const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>('/api/v1/finance/auto-entry-rules', { limit: 1000, offset: 0 });
-        if (!disposed) onData({ id: 'automatic-voucher-rules', data: extractRows(response.data) });
-      } catch (error) { if (!disposed) onError?.(error); }
-    };
-    void refresh();
-    const timer = setInterval(() => void refresh(), 30_000);
-    return () => { disposed = true; clearInterval(timer); };
+        return { id: 'automatic-voucher-rules', data: extractRows(response.data) };
+      },
+      onData,
+      onError ?? (() => undefined),
+    );
   },
   async get() {
     const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>('/api/v1/finance/auto-entry-rules', { limit: 1000, offset: 0 });

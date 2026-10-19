@@ -1,4 +1,5 @@
 import { ApiClient } from "../../../data/http/api-client";
+import { subscribePollingChannel } from "../../../data/http/polling-channel";
 
 type ApiEnvelope<T> = { success: true; data: T };
 type ReportRow = Record<string, unknown> & { id: string };
@@ -104,20 +105,13 @@ export const reportsApiDataGateway = {
   isEnabled: enabled,
   subscribeCoreData(handlers: ReportsStateHandlers): () => void {
     if (!enabled()) return () => undefined;
-    let disposed = false;
-    const refresh = async () => {
-      try {
-        const state = await load();
-        if (!disposed) handlers.onData(state);
-      } catch (error) {
-        if (!disposed) handlers.onError?.(error);
-      }
-    };
-    void refresh();
-    const interval = setInterval(() => void refresh(), 30_000);
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
+    // شاشة التقارير الوحيدة اليوم، لكن القناة تمنع أي شاشة إضافية من مضاعفة نفس الجلب.
+    // The reports screen is the only subscriber today; the channel still stops any extra screen from duplicating it.
+    return subscribePollingChannel<ReportsState>(
+      'reports-core-data',
+      load,
+      handlers.onData,
+      handlers.onError ?? (() => undefined),
+    );
   },
 };

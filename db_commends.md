@@ -5353,3 +5353,706 @@ ON CONFLICT (version) DO NOTHING;
 - `report_templates_count` = 2
 - `legacy_tables_remaining` = 0
 - `public_jsonb_columns_remaining` = 0
+
+---
+
+## [2026-10-18 03:14:24 +03:00] — SQL منفَّذ في جولة إصلاح الدخول/المرحلة #2/الجلسات (AI Model: Qoder Agent)
+> **لا يوجد أي DDL في هذه الجولة.** كل أمر نُفِّذ كان قراءة فقط عبر دور التشغيل `alx_api_runtime` (اتصال `127.0.0.1:3001` / pooler Supabase `ejrojwbbflzchasvgexr`)، أو معاملة `BEGIN … ROLLBACK` ملفَّقة دائمًا، أو استدعاء دالة بمعرّف **غير موجود**. الترحيلات 0044–0047 مؤلَّفة في `alx_api/src/db/migrations/` ولم تُطبَّق.
+
+### 1) فحوصات القدرات (قراءة فقط)
+```sql
+-- مصفوفة صلاحيات دور التشغيل على الجداول المعنية بالسياسات والحذف
+SELECT table_name, privilege_type
+  FROM information_schema.table_privileges
+ WHERE grantee = 'alx_api_runtime'
+   AND table_schema IN ('public', 'alx_api_private')
+ ORDER BY table_name, privilege_type;
+
+-- سياسات RLS وحالة الإكراه على جدولَي الجلسات
+SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS rls_forced
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'alx_api_private' AND c.relname IN ('api_sessions', 'portal_sessions');
+SELECT tablename, policyname, cmd FROM pg_policies WHERE schemaname = 'alx_api_private';
+
+-- توقيع دالة التطهير ومالكها (SECURITY DEFINER => postgres)
+SELECT n.nspname AS schema, p.proname AS function,
+       pg_get_function_identity_arguments(p.oid) AS args,
+       p.proowner::regrole::text AS owner
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.relnamespace
+ WHERE p.proname IN ('purge_entity_financial_footprint', 'ensure_entity_financial_account');
+
+-- مجموعات الحسابات التي تربط نوع الكيان برمز الحساب (acc_sub_group)
+SELECT entity_type, account_code, is_active, allows_direct_accounts, acc_sub_group_id, acc_sub_id
+  FROM public.acc_sub_group ORDER BY entity_type;
+
+-- هوية منفّذ الاتصال ومضيف الخادم
+SELECT current_user AS u, inet_server_addr()::text AS host;
+```
+
+### 2) dry-run لمسار الإنشاء (معاملة تُرجَع دائمًا)
+لكل نوع (`source`, `shipping_company`, `employee`, `courier`) وفي كل مرة:
+```sql
+BEGIN;
+-- توليد حساب الكيان عبر نفس الدالة المشتركة التي يستدعيها الـ API (ensureEntityAccount)
+SELECT user_id AS "userId" FROM public.users ORDER BY created_at NULLS LAST LIMIT 1;  -- قُبلت خارج المعاملة كمنفّذ
+INSERT INTO public.sources (source_id, name, type, source_url, name_ar, name_en, is_active, account_id, created_at, updated_at, created_by, updated_by)
+ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW(),$9,$9) RETURNING source_id;
+INSERT INTO public.shipping_companies (shipping_company_id, name, shipping_company_url, tracking_id_prefix, name_ar, name_en, is_active, account_id, address, code,
+       country_id, phone, email, api_url, tracking_url_template, api_enabled, supports_tracking, supports_webhook, created_at, updated_at, created_by, updated_by)
+ VALUES ($1,…,$18,NOW(),NOW(),$19,$19) RETURNING shipping_company_id, name;
+INSERT INTO public.employees (employee_id, account_id, monthly_salary, currency, full_name, name_ar, name_en, job_type, commission_rate, phone, email, disabled,
+       address, gps_location, notes, created_at, updated_at, created_by, updated_by)
+ VALUES ($1,$2,$3,'YER',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW(),$15,$15) RETURNING employee_id, account_id;
+INSERT INTO public.couriers (courier_id, account_id, currency, is_active, full_name, name_ar, name_en, courier_type, courier_level, commission_rate, phone, email,
+       address, gps_location, notes, created_at, updated_at, created_by, updated_by)
+ VALUES ($1,$2,'YER',true,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW(),$14,$14) RETURNING courier_id;
+ROLLBACK;   -- لا يبقى أي صف: النتيجة 0 بقايا في كل جداول الفحص
+```
+**النتيجة**: المسارات الأربعة تنجح مع الأعمدة المسطّحة الجديدة بعد إصلاح 0044 (المشكلة الأصلية كانت داخل دالة التوليد: عمود `accounts.data` المسقوط + ترتيب معطيات مقلوب).
+
+### 3) استدعاء دالة التطهير بمعرّفات غير موجودة (قراءة السلوك بلا أثر)
+```sql
+SELECT public.purge_entity_financial_footprint($1, $2, $3) AS purged;  -- $2 = 'qoder_probe_missing_<type>'
+-- الأنواع: sources, shipping_companies, couriers, employees
+```
+**النتيجة**: الدالة قابلة للاستدعاء من دور التشغيل وتُرجع بلا خطأ على معرّف غير موجود، وتكشف عند تمرير معرّف حقيقي ترتيب الحذف الخاطئ الذي يصلحه 0046 (حذف `public.accounts` قبل صف الكيان ⟵ 23503 لدى `RESTRICT` و`SET NULL` مُيتّم لدى couriers/employees/customers/orders).
+
+### 4) فحوصات الجلسات والفهارس (قراءة فقط)
+```sql
+SELECT to_char(expires_at, 'YYYY-MM-DD HH24:MI:SS') AS expires, revoked_at IS NOT NULL AS revoked
+  FROM alx_api_private.portal_sessions WHERE session_id = $1;
+SELECT count(*) FROM public.sources WHERE name LIKE 'Qoder probe%';
+SELECT count(*) FROM public.shipping_companies WHERE name LIKE 'Qoder probe%';
+SELECT count(*) FROM public.employees WHERE full_name LIKE 'Qoder probe%';
+SELECT count(*) FROM public.couriers WHERE full_name LIKE 'Qoder probe%';
+SELECT count(*) FROM public.accounts WHERE acc_name_ar LIKE '%Qoder probe%';
+SELECT c.relname AS table_name, i.relname AS index_name FROM pg_index x
+  JOIN pg_class c ON c.oid = x.indrelid JOIN pg_class i ON i.oid = x.indexrelid
+ WHERE c.relname IN ('sources','shipping_companies','employees','couriers');
+SELECT code, is_active, is_default, cur_id FROM public.currency ORDER BY code;
+SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND column_name IN ('device_name','user_agent','ip_address');
+```
+**النتيجة النهائية**: كل عدّادات بقايا الفحص = **0**، وعملات `public.currency` = 5، ولا أعمدة حقائق الجهاز في `portal_sessions` قبل تطبيق 0047.
+
+### 5) ملاحظة تشغيلية
+حدث انقطاع اتصال واحد من pooler Supabase (`Connection terminated due to connection timeout`) أثناء الفحص، وعادت الأمور بإعادة تنفيذ نفس استعلامات القراءة فقط — لا أثر على البيانات.
+
+---
+
+## [2026-10-18 23:40:15 +03:00] — الأوامر المنفَّذة وقت تطبيق الترحيلات 0044←0047 (AI Model: Qoder Agent)
+المشروع `ejrojwbbflzchasvgexr`، الدور `postgres` عبر Supabase MCP بعد إعادة التفويض. كل أمر يُذكر كما أُرسل (مع حذف التعليقات الطويلة اختصارًا).
+
+### 1) استطلاع ما قبل التطبيق (قراءة فقط)
+```sql
+SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version::bigint DESC LIMIT 10;   -- الأحدث: 0043
+
+SELECT (SELECT count(*) FROM public.accounts WHERE entity_id IS NOT NULL AND type IN ('YER','SAR','USD','EGP','EUR')) AS broken_type_accounts,
+       (SELECT count(*) FROM public.accounts WHERE entity_id IS NOT NULL AND currency IN ('Liability','Asset','Equity','Revenue','Expense')) AS broken_currency_accounts,
+       (SELECT count(*) FROM public.accounts WHERE NULLIF(btrim(COALESCE(currency,'')),'') IS NULL) AS empty_currency_accounts,
+       (SELECT count(*) FROM public.accounts WHERE entity_id IS NOT NULL AND cur_no IS NULL) AS missing_cur_no,
+       (SELECT count(*) FROM alx_api_private.portal_sessions) AS portal_total,
+       (SELECT count(*) FROM alx_api_private.portal_sessions WHERE expires_at <= NOW() OR revoked_at IS NOT NULL) AS portal_dead,
+       has_table_privilege('alx_api_runtime','alx_api_private.api_sessions','DELETE') AS api_can_delete,
+       has_table_privilege('alx_api_runtime','alx_api_private.portal_sessions','DELETE') AS portal_can_delete;
+-- → 0,0,0,1, 9, 2, false, false
+
+SELECT pg_get_function_identity_arguments('public.ensure_entity_financial_account(text,text,text,text,text,text,text)'::regprocedure), proowner::regrole, proacl::text;
+-- → p_account_type رابعًا (التوقيع المقلوب الحيّ)، المالك postgres، EXECUTE لـ PUBLIC/anon/authenticated/service_role/alx_api_runtime
+SELECT p.proname, (regexp_matches(pg_get_functiondef(p.oid), 'ensure_entity_financial_account\([^;)]*\)', 'g'))[1] AS call_site
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+ WHERE p.prokind='f' AND pg_get_functiondef(p.oid) LIKE '%ensure_entity_financial_account%' AND n.nspname='public';
+-- → خمسة تريجّرات نداءها (id, type, name, currency, prefix, accountType, notes)
+```
+
+### 2) الترحيلات المطبَّقة (DDL فعّال)
+```sql
+-- 0044 (نجح في المحاولة الثانية؛ الأولى فشلت بـ 42P13 لأن CREATE OR REPLACE لا يعيد تسمية المعطيات)
+DROP FUNCTION IF EXISTS public.ensure_entity_financial_account(text, text, text, text, text, text, text);
+CREATE FUNCTION public.ensure_entity_financial_account(p_entity_id text, p_entity_type text, p_entity_name text,
+  p_currency text, p_prefix text, p_account_type text, p_notes text) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog','public' AS $function$ … $function$;
+COMMENT ON FUNCTION public.ensure_entity_financial_account(text,text,text,text,text,text,text) IS '…';
+GRANT EXECUTE ON FUNCTION public.ensure_entity_financial_account(text,text,text,text,text,text,text)
+  TO PUBLIC, anon, authenticated, service_role, alx_api_runtime;
+UPDATE public.accounts a SET type = CASE WHEN left(COALESCE(a.account_prefix, split_part(a.account_code,'-',1)),1)='1' THEN 'Asset' ELSE 'Liability' END, updated_at = now()
+ WHERE a.entity_id IS NOT NULL AND a.type IN ('YER','SAR','USD','EGP','EUR');
+UPDATE public.accounts a SET currency = (SELECT c.code FROM public.currency c WHERE c.cur_id = a.cur_no), updated_at = now()
+ WHERE a.entity_id IS NOT NULL AND a.currency IN ('Liability','Asset','Equity','Revenue','Expense');
+UPDATE public.accounts a SET currency = COALESCE((SELECT c.code FROM public.currency c WHERE c.cur_id=a.cur_no),
+                                                (SELECT c.code FROM public.currency c WHERE c.is_default IS TRUE LIMIT 1),'YER'), updated_at = now()
+ WHERE NULLIF(btrim(COALESCE(a.currency,'')),'') IS NULL;
+UPDATE public.accounts a SET cur_no = c.cur_id, updated_at = now() FROM public.currency c
+ WHERE a.entity_id IS NOT NULL AND a.cur_no IS NULL AND lower(c.code) = lower(COALESCE(NULLIF(btrim(a.currency),''),'YER'));
+UPDATE public.accounts a SET entity_type = 'courier',  updated_at = now() FROM public.couriers  co  WHERE a.entity_id = co.courier_id          AND NULLIF(btrim(COALESCE(a.entity_type,'')),'') IS NULL;
+UPDATE public.accounts a SET entity_type = 'employee', updated_at = now() FROM public.employees em  WHERE a.entity_id = em.employee_id         AND NULLIF(btrim(COALESCE(a.entity_type,'')),'') IS NULL;
+UPDATE public.accounts a SET entity_type = 'source',   updated_at = now() FROM public.sources   so  WHERE a.entity_id = so.source_id           AND NULLIF(btrim(COALESCE(a.entity_type,'')),'') IS NULL;
+UPDATE public.accounts a SET entity_type = 'shipping_company', updated_at = now() FROM public.shipping_companies sc WHERE a.entity_id = sc.shipping_company_id AND NULLIF(btrim(COALESCE(a.entity_type,'')),'') IS NULL;
+UPDATE public.accounts a SET entity_type = 'customer', updated_at = now() FROM public.customers cu   WHERE a.entity_id = cu.customer_id         AND NULLIF(btrim(COALESCE(a.entity_type,'')),'') IS NULL;
+UPDATE public.accounts a SET entity_type = 'asset',    updated_at = now() FROM public.assets    ast  WHERE a.entity_id = ast.asset_id           AND NULLIF(btrim(COALESCE(a.entity_type,'')),'') IS NULL;
+
+-- 0045 (المحاولة الأولى فشلت بـ 42601: CREATE POLICY IF NOT EXISTS غير موجود، فرُجع المعامل كله)
+GRANT DELETE ON alx_api_private.api_sessions TO alx_api_runtime;
+DO $policy$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policy WHERE polrelid='alx_api_private.api_sessions'::regclass AND polname='api_runtime_sessions_delete') THEN
+    CREATE POLICY api_runtime_sessions_delete ON alx_api_private.api_sessions FOR DELETE TO alx_api_runtime USING (true);
+  END IF;
+END $policy$;
+
+-- 0046
+CREATE OR REPLACE FUNCTION public.purge_entity_financial_footprint(p_entity_type text, p_entity_id text, p_actor text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'pg_catalog' AS $function$ … $function$;
+COMMENT ON FUNCTION public.purge_entity_financial_footprint(text,text,text) IS '…';
+
+-- 0047
+ALTER TABLE alx_api_private.portal_sessions
+    ADD COLUMN IF NOT EXISTS device_name text,
+    ADD COLUMN IF NOT EXISTS user_agent  text,
+    ADD COLUMN IF NOT EXISTS ip_address  text;
+COMMENT ON COLUMN alx_api_private.portal_sessions.device_name IS '…';
+COMMENT ON COLUMN alx_api_private.portal_sessions.user_agent  IS '…';
+COMMENT ON COLUMN alx_api_private.portal_sessions.ip_address  IS '…';
+GRANT DELETE ON alx_api_private.portal_sessions TO alx_api_runtime;
+DO $policy$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policy WHERE polrelid='alx_api_private.portal_sessions'::regclass AND polname='portal_runtime_sessions_delete') THEN
+    CREATE POLICY portal_runtime_sessions_delete ON alx_api_private.portal_sessions FOR DELETE TO alx_api_runtime USING (true);
+  END IF;
+END $policy$;
+
+-- الخطوة الرابعة من 0047 ذُلت سهوًا من النص المُرسَل، فنُفِّذت بأمر مستقل بنفس الدلالة:
+DELETE FROM alx_api_private.portal_sessions WHERE expires_at <= NOW() OR revoked_at IS NOT NULL
+ RETURNING session_id, to_char(expires_at,'YYYY-MM-DD HH24:MI') AS expires_at, (revoked_at IS NOT NULL) AS was_revoked;
+-- → صفان: 853741ec… (ملغاة) و 39843ac6… (منتهية 2026-10-17 22:47)
+```
+
+### 3) تحقق ما بعد التطبيق (قراءة فقط)
+```sql
+SELECT pg_get_function_identity_arguments('public.ensure_entity_financial_account(text,text,text,text,text,text,text)'::regprocedure) AS args,
+       proowner::regrole::text AS owner, prosecdef, proconfig AS settings, proacl::text AS acl FROM pg_proc
+ WHERE oid='public.ensure_entity_financial_account(text,text,text,text,text,text,text)'::regprocedure;
+-- → الأسماء صحيحة (p_currency رابعة)، المالك postgres، search_path مثبت، ACL مطابق لما قبل الإسقاط
+
+SELECT has_table_privilege('alx_api_runtime','alx_api_private.api_sessions','DELETE') AS api_can_delete,
+       has_table_privilege('alx_api_runtime','alx_api_private.portal_sessions','DELETE') AS portal_can_delete,
+       (SELECT string_agg(polname, ', ' ORDER BY polname) FROM pg_policy WHERE polrelid='alx_api_private.api_sessions'::regclass) AS api_policies,
+       (SELECT string_agg(polname, ', ' ORDER BY polname) FROM pg_policy WHERE polrelid='alx_api_private.portal_sessions'::regclass) AS portal_policies,
+       (SELECT string_agg(column_name, ', ' ORDER BY column_name) FROM information_schema.columns
+         WHERE table_schema='alx_api_private' AND table_name='portal_sessions'
+           AND column_name IN ('device_name','user_agent','ip_address')) AS portal_device_columns;
+-- → true / true / 5 سياسات / 4 سياسات / 3 أعمدة
+
+SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version::bigint DESC LIMIT 8;   -- 0044..0047 مسجَّلة
+
+SELECT (SELECT count(*) FROM public.sources WHERE name LIKE 'Qoder%') AS src_left,
+       (SELECT count(*) FROM public.couriers WHERE full_name LIKE 'Qoder%') AS cour_left,
+       (SELECT count(*) FROM public.shipping_companies WHERE name LIKE 'Qoder%') AS shipco_left,
+       (SELECT count(*) FROM public.employees WHERE full_name LIKE 'Qoder%') AS emp_left,
+       (SELECT count(*) FROM public.accounts WHERE acc_name_ar LIKE '%Qoder%' OR acc_name_en LIKE '%Qoder%') AS acct_left;
+-- → 0,0,0,0,0
+
+SELECT (device_name IS NULL) AS no_device, round(EXTRACT(EPOCH FROM (expires_at - created_at))/60) AS window_minutes, count(*)
+  FROM alx_api_private.api_sessions GROUP BY 1,2 ORDER BY 3 DESC;
+-- → جلسة متصفح واحدة بنافذة 86 دقيقة؛ بقايا قديمة بنوافذ 43200 و49867 دقيقة بلا حقائق جهاز (لم تُمسح بقرار منتظر من المالك)
+
+SELECT COALESCE(NULLIF(btrim(timezone),''),'(empty)') AS configured_timezone,
+       COALESCE(user_session_timeout::text,'(null)') AS configured_timeout
+  FROM public.settings_general WHERE settings_key = 'general' LIMIT 1;
+-- → Asia/Aden ، 0
+```
+
+### 4) فحوصات حيّة مُدارة من كود الـ API (كلها `BEGIN … ROLLBACK`)
+- `tmp-create-dry-run.ts`: إدراج مصدر/شركة شحن/موظف/مندوب عبر مسار التريجّرات نفسه ← نجح، والحسابات `2141-0009` و`2131-0010`، ثم `ROLLBACK`.
+- `tmp-purge-order-check.ts` (مؤقت وحُذف بعد الجولة): إنشاء كيان ثم `SELECT public.purge_entity_financial_footprint($1,$2,$3)` داخل المعاملة نفسها ← `entityRows=0` و`accountRows=0` للمصدر والمندوب وشركة الشحن، ثم `ROLLBACK`.
+- انقطاعان من pooler (`ECONNRESET` وtimeout) أُعيد تنفيذ نفس الفحوصات بعدهما بلا أثر على البيانات.
+
+## [2026-10-19 01:24:33 +03:00] — SQL جولة سعر الصرف وتنظيف الجلسات وتضييق الدالة (AI Model: Qoder Agent)
+
+### 1) تشخيص تسلسل أسعار الصرف (قراءة فقط)
+```sql
+SELECT column_name, data_type FROM information_schema.columns
+ WHERE table_schema='public' AND table_name='cur_price' ORDER BY ordinal_position;
+
+SELECT cp.cur_no, c.code, count(*) AS rows, min(cp.seq) AS min_seq, max(cp.seq) AS max_seq,
+       (array_agg(cp.price ORDER BY cp.seq ASC))[1]  AS price_at_min_seq,
+       (array_agg(cp.price ORDER BY cp.seq DESC))[1] AS price_at_max_seq,
+       (array_agg(cp.price ORDER BY cp.created_at DESC))[1] AS price_at_newest_created,
+       min(cp.day_date) AS first_day, max(cp.day_date) AS last_day, max(cp.created_at) AS newest_created
+  FROM public.cur_price cp LEFT JOIN public.currency c ON c.cur_id = cp.cur_no
+ GROUP BY cp.cur_no, c.code ORDER BY rows DESC;
+
+SELECT cp.cur_price_id, cp.cur_no, c.code, cp.price, cp.seq, cp.day_date, cp.created_at, cp.updated_by
+  FROM public.cur_price cp JOIN public.currency c ON c.cur_id = cp.cur_no
+ ORDER BY cp.cur_no, cp.seq;
+
+-- نفس عبارة LATERAL التي يستخدمها الـ API للتأكد أنها تعيد آخر تسلسل
+SELECT c.cur_id AS "currencyId", c.code,
+       CASE WHEN c.is_default THEN 1 ELSE latest.price END AS "currentPrice",
+       latest.seq AS "lastSeq", latest.day_date AS "lastUpdateDate"
+  FROM public.currency c
+  LEFT JOIN LATERAL (
+    SELECT cp.price, cp.seq, cp.day_date FROM public.cur_price cp
+     WHERE cp.cur_no = c.cur_id ORDER BY cp.seq DESC, cp.cur_price_id DESC LIMIT 1
+  ) latest ON true ORDER BY c.cur_id ASC;
+
+SELECT n.nspname AS schema, p.proname AS func, pg_get_function_identity_arguments(p.oid) AS args
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE p.prokind='f' AND pg_get_functiondef(p.oid) ILIKE '%cur_price%' ORDER BY 1,2;
+
+SELECT pg_get_functiondef('public.accounting_to_system_currency(numeric,integer)'::regprocedure) AS fn;
+SELECT pg_get_functiondef('public.derive_account_trans_conversion_rate()'::regprocedure) AS fn;
+SELECT schemaname, viewname FROM pg_views WHERE definition ILIKE '%cur_price%' OR definition ILIKE '%currency%';
+
+-- الأسطر الموسومة بأول تسلسل (الأثر التاريخي الذي يحتاج قرارًا)
+SELECT count(*) AS legs_with_ref,
+       count(*) FILTER (WHERE currency_price_id = 1 AND currency_price_seq = 1) AS stuck_on_first_sequence
+  FROM public.account_trans WHERE currency_price_id IS NOT NULL;
+
+SELECT t.account_trans_id, t.main_entry_id, t.line_no, ac.code AS acc_code, oc.code AS orig_code,
+       t.amount, t.amount_original, t.conversion_rate, to_char(t.created_at,'YYYY-MM-DD HH24:MI') AS created
+  FROM public.account_trans t
+  LEFT JOIN public.currency ac ON ac.cur_id = t.account_cur_no
+  LEFT JOIN public.currency oc ON oc.cur_id = t.currency_original_no
+ WHERE t.currency_price_id = 1 AND t.currency_price_seq = 1 ORDER BY t.created_at;
+```
+النتائج: `seq` يطابق `created_at` لكل عملة؛ كل قراءات `cur_price` في القاعدة والـ API مرتّبة `DESC`؛ **5 أسطر** (قيدان) تحمل المرجع `(1,1)` مع مبالغ صحيحة — الخلل كان في الكود لا في SQL.
+
+### 2) حذف جلسات `api_sessions` بلا حقائق جهاز (قرار المالك)
+```sql
+-- معاينة قبل الحذف
+SELECT count(*) AS total,
+       count(*) FILTER (WHERE device_name IS NULL AND user_agent IS NULL AND ip_address IS NULL) AS no_device_facts,
+       count(*) FILTER (WHERE device_name IS NULL AND user_agent IS NULL AND ip_address IS NULL AND expires_at > NOW() AND revoked_at IS NULL) AS no_device_still_alive
+  FROM alx_api_private.api_sessions;
+
+WITH stale AS (
+  DELETE FROM alx_api_private.api_sessions
+   WHERE device_name IS NULL AND user_agent IS NULL AND ip_address IS NULL
+  RETURNING session_id
+) SELECT count(*) AS deleted_sessions FROM stale;
+```
+النتيجة: `total=20`، `no_device_facts=20`، `deleted_sessions=20`، وبعدها `sessions_left=0` و`orphan_tokens=0`.
+
+### 3) تضييق `EXECUTE` على دالة التزويد (قرار المالك)
+```sql
+SELECT COALESCE(string_agg(COALESCE(r.rolname,'PUBLIC')||':'||a.privilege_type,' | ' ORDER BY r.rolname NULLS FIRST),'(فارغ)') AS acl
+  FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a
+  LEFT JOIN pg_roles r ON r.oid = a.grantee
+ WHERE p.oid = 'public.ensure_entity_financial_account(text,text,text,text,text,text,text)'::regprocedure;
+
+REVOKE EXECUTE ON FUNCTION public.ensure_entity_financial_account(text,text,text,text,text,text,text)
+  FROM PUBLIC, anon, authenticated;
+
+SELECT COALESCE(string_agg(COALESCE(r.rolname,'PUBLIC')||':'||a.privilege_type,' | ' ORDER BY r.rolname NULLS FIRST),'(فارغ)') AS acl_after
+  FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a
+  LEFT JOIN pg_roles r ON r.oid = a.grantee
+ WHERE p.oid = 'public.ensure_entity_financial_account(text,text,text,text,text,text,text)'::regprocedure;
+
+SELECT r.rolname AS role, t.tabname AS tbl,
+       has_table_privilege(r.rolname, 'public.'||t.tabname, 'INSERT') AS can_insert,
+       has_table_privilege(r.rolname, 'public.'||t.tabname, 'UPDATE') AS can_update
+  FROM unnest(ARRAY['sources','employees','couriers','shipping_companies','customers','assets','accounts','orders']) t(tabname)
+ CROSS JOIN unnest(ARRAY['anon','authenticated','service_role','alx_api_runtime']) r(rolname)
+ ORDER BY t.tabname, r.rolname;
+```
+- قبل: `PUBLIC \| alx_api_runtime \| anon \| authenticated \| postgres \| service_role` كلها `EXECUTE`.
+- بعد: `postgres \| service_role \| alx_api_runtime` فقط.
+- **لماذا `PUBLIC`**: منْح `anon`/`authenticated` باسمهما وحدهما لا يسحب شيئًا لأن منح `PUBLIC` يسري عليهما ضمنيًا.
+- **اكتشاف معلّق**: `anon` و`authenticated` يملكان `INSERT`/`UPDATE` على الجداول الثمانية — لم تُمسّ، بانتظار قرار المالك.
+
+### 4) إعادة التحقق الحيّ بعد السحب (مسار الـ API، ثم تراجع)
+```sql
+SELECT (SELECT count(*) FROM public.sources WHERE name LIKE 'QODER-%') AS src,
+       (SELECT count(*) FROM public.shipping_companies WHERE name LIKE 'QODER-%') AS sc,
+       (SELECT count(*) FROM public.employees WHERE full_name LIKE 'QODER-%') AS emp,
+       (SELECT count(*) FROM public.couriers WHERE full_name LIKE 'QODER-%') AS cr,
+       (SELECT count(*) FROM public.accounts WHERE account_number = '0009' AND account_prefix = '2141') AS acc_probe;
+```
+الإنشاء عبر `alx_api` نجح بعد السحب (`2141-0009`, `2131-0010`) وكل العدادات `0` لأن الفحص كان داخل معامل مُرجَع.
+
+
+---
+
+## [2026-10-19 02:46:14 +03:00] — استعلامات تحقق فقط (قراءة) لجولة «تحديث الـAPI + حسابات المصادر + كشف الحساب»
+
+**AI Model:** Qoder Agent — **Project:** `ejrojwbbflzchasvgexr` — **DDL/DML:** لا شيء (لم تُجرَ أي كتابة على قاعدة البيانات في هذه الجولة، ولا ترحيل جديد).
+
+**لماذا القراءة فقط:** الجولة كود أمامي/خادمي بالكامل؛ احتجنا فقط تأكيد أسماء الأعمدة ومسارات الربط قبل كتابة الاستعلامات داخل `alx_api`.
+
+1) أعمدة الجداول المتحكِّمة (تأكيد أن `account_id` نص في `sources`/`shipping_companies`/`accounts` وأن الاسم `account_code` لا `account_name`):
+```sql
+SELECT table_name, column_name, data_type FROM information_schema.columns
+WHERE table_schema='public' AND table_name IN ('accounts','sources','shipping_companies')
+ORDER BY table_name, ordinal_position;
+```
+
+2) أعمدة ربط الطلبات بالمصدر/شركة الشحن:
+```sql
+SELECT table_name, column_name, data_type FROM information_schema.columns
+WHERE table_schema='public' AND table_name IN ('orders','shipments')
+  AND (column_name ILIKE '%source%' OR column_name ILIKE '%shipping%' OR column_name ILIKE '%carrier%' OR column_name ILIKE '%account%')
+ORDER BY table_name, ordinal_position;
+```
+
+3) أنواع الكيانات المستخدمة فعليًا في `accounts` (للتأكد من وجود `source` و`shipping_company`):
+```sql
+SELECT DISTINCT entity_type, count(*) FROM public.accounts GROUP BY entity_type ORDER BY 2 DESC;
+```
+→ `system 29`، `shipping_company 18`، `customer 11`، `source 9`، `courier 7`، `employee 4`، `asset 2`، `NULL 4`.
+
+4) قياس مدى اكتمال بيانات الطلبات/الشحنات قبل اعتماد الفلتر المزدوج لشركة الشحن:
+```sql
+SELECT (SELECT count(*) FROM public.orders o WHERE NULLIF(o.order_source_id,'') IS NOT NULL)  AS orders_with_source,
+       (SELECT count(*) FROM public.orders o WHERE NULLIF(o.shipping_company,'') IS NOT NULL) AS orders_with_ship_company,
+       (SELECT count(*) FROM public.shipments s WHERE NULLIF(s.shipping_company_id,'') IS NOT NULL) AS shipments_with_company,
+       (SELECT count(*) FROM public.orders o JOIN public.shipments s ON s.order_id=o.order_id
+         WHERE o.shipping_company = s.shipping_company_id) AS order_company_equals_shipment_company;
+```
+→ القيم `1/1/1/1` (قاعدة اختبار صغيرة) — المفتاح النصي نفسه مستخدم في الموضعين، لذلك فُلتر `shippingCompanyId` يقبل كليهما.
+
+5) تجربة الاستعلام المرتبط كما سيخرج من `reporting.repository.ts` (مصادر):
+```sql
+SELECT source_id AS "sourceId", name, account_id AS "accountId",
+       (SELECT a.account_code FROM public.accounts a WHERE a.account_id = sources.account_id) AS "accountCode",
+       (SELECT a.acc_name_ar  FROM public.accounts a WHERE a.account_id = sources.account_id) AS "accountNameAr",
+       (SELECT a.currency     FROM public.accounts a WHERE a.account_id = sources.account_id) AS "accountCurrency"
+FROM public.sources ORDER BY created_at DESC LIMIT 5;
+```
+→ SHEIN=`2141-0008`، AMAZON=`2141-0001`، مصانع اخرى=`2141-0007`، Noon=`2141-0005`، AliExpress=`2141-0004` (كلها YER).
+
+6) التجربة نفسها لشركات الشحن:
+```sql
+SELECT shipping_company_id AS "shippingCompanyId", name, account_id AS "accountId",
+       (SELECT a.account_code FROM public.accounts a WHERE a.account_id = shipping_companies.account_id) AS "accountCode",
+       (SELECT a.acc_name_ar  FROM public.accounts a WHERE a.account_id = shipping_companies.account_id) AS "accountNameAr"
+FROM public.shipping_companies ORDER BY created_at DESC LIMIT 8;
+```
+→ EMS=`2151-0005`، SPL=`2151-0012`، SafePost=`2151-0011`، Aramex=`2151-0018`، UPS=`2151-0014`، J&T=`2151-0016`، 4PX=`2151-0006`، AliExpress Standard=`2151-0007`.
+
+7) فحص فلتر الطلبات عبر المصدر/شركة الشحن:
+```sql
+SELECT o.order_id, o.order_number, o.order_source_id, o.shipping_company FROM public.orders o
+WHERE o.order_source_id = (SELECT source_id FROM public.sources WHERE name='SHEIN' LIMIT 1)
+   OR EXISTS (SELECT 1 FROM public.shipments sh WHERE sh.order_id=o.order_id AND sh.shipping_company_id = o.shipping_company)
+LIMIT 5;
+```
+→ أعاد `ALX-2610-1006` (مصدر SHEIN وشركة Aramex) — وهو الصف الوحيد في قاعدة الاختبار.
+
+---
+
+## [2026-10-19 03:58:31 +03:00] — استعلامات قراءة فقط لتشخيص «كشف حساب فارغ» للمصادر/شركات الشحن (AI Model: Qoder Agent)
+
+**AI Model:** Qoder Agent — **الوقت:** 2026-10-19 03:40 → 03:55 (+03:00) — **Project:** `ejrojwbbflzchasvgexr` — **DDL/DML:** لا شيء (قراءة فقط؛ لا `INSERT`/`UPDATE`/`DELETE`/`GRANT`/ترحيل جديد في هذه الجولة).
+
+**السبب:** بعد إصلاح العطل البرمجي للنافذة بقينا أمام تبويب «كشف الحساب» فارغًا، فلزم تأكيد هل الحسابات موجودة وهل عليها أسطر قيود فعلًا — وهو قرار بيانات يخصّ المالك فلا نلمسه.
+
+1) مطابقة معرّفات المصادر مع أعمدة الطلبات (هل `order_source_id` يحمل `source_id` أم الاسم؟):
+```sql
+select s.source_id, s.name, s.account_id,
+       (select count(*) from public.orders o where o.order_source_id = s.source_id) as orders_by_id,
+       (select count(*) from public.orders o where o.order_source_id = s.name)      as orders_by_name
+from public.sources s order by s.name limit 20;
+```
+→ المطابقة تسير على `source_id` نفسه (الاسم لا يرجع شيئًا)، فالفلتر الخادمي `?sourceId=` سليم.
+
+2) عدّاد حسابات الكيانات محل الكشف:
+```sql
+select a.entity_type, count(distinct a.account_id) as accounts, count(distinct a.entity_id) as entity_ids,
+       sum(case when a.entity_id is null then 1 else 0 end) as null_eid
+from public.accounts a
+where a.entity_type in ('source','shipping_company')
+group by a.entity_type;
+```
+→ `shipping_company`: 18 حسابًا/18 معرّف كيان/0 فارغ — `source`: 9 حسابات/9 معرّفات/0 فارغ. أي **27 حسابًا كلها مربوطة بكيان صحيح**.
+
+3) فحص كل حساب برصيده وعدد أسطر قيوده:
+```sql
+select a.entity_type, a.account_id, a.entity_id, a.balance,
+       coalesce(s.source_id, sc.shipping_company_id) as matched_entity,
+       (select count(*) from public.account_trans at where at.account_id = a.account_id) as legs
+from public.accounts a
+left join public.sources s            on s.source_id            = a.entity_id
+left join public.shipping_companies sc on sc.shipping_company_id = a.entity_id
+where a.entity_type in ('source','shipping_company')
+order by a.entity_type, a.account_id limit 40;
+```
+→ كل الصفوف `balance = 0` و`legs = 0`، و`matched_entity` يطابق `entity_id` في الجميع (DHL=`2151-0001`، IMILE=`2151-0002`، Cainiao=`2151-0003`، FedEx=`2151-0004`، EMS=`2151-0005`، 4PX Express=`2151-0006` …). **الربط سليم والقيود معدومة.**
+
+4) المحاولة الأولى للعدّاد الشامل فشلت (خطأ حقيقي موثَّق):
+```sql
+select (select count(*) from public.account_trans) as total_legs,
+       (select count(*) from public.account_trans at where at.account_id like '2141%') as legs_source_prefix, …
+```
+→ `ERROR 42P01: missing FROM-clause entry for table "at"` — لأن `at` اسم محجوز/غير مرئي داخل استعلام فرعي بلا جدول `FROM` مسمّى؛ أُصلح بإسناد اسم جدول صريح (`x`).
+
+5) العدّاد الشامل بعد التصحيح:
+```sql
+select (select count(*) from public.account_trans) as total_legs,
+       (select count(*) from public.account_trans x where x.account_id like '2141%') as legs_source_prefix,
+       (select count(*) from public.account_trans x where x.account_id like '2151%') as legs_carrier_prefix,
+       (select count(distinct x.account_id) from public.account_trans x) as distinct_accts,
+       (select count(*) from public.account_trans x where x.entity_type='source')          as legs_et_source,
+       (select count(*) from public.account_trans x where x.entity_type='shipping_company') as legs_et_carrier;
+```
+→ `total_legs=41`, `legs_source_prefix=0`, `legs_carrier_prefix=0`, `distinct_accts=12`, `legs_et_source=0`, `legs_et_carrier=0`.
+
+6) توزيع الأسطر الـ41 على الحسابات:
+```sql
+select x.account_id, x.entity_type, x.entity_id, count(*) as legs
+from public.account_trans x group by 1,2,3 order by 1;
+```
+→ 12 حسابًا و16 مجموعة: `1110-0001`(2+1)، `1110-0002`(2+3)، `1110-0003`(4+6)، `1121-0001`(1)، `1132-0005`(2)، `1132-0006`(3)، `1132-0012`(4)، `1150-0001`(3)، `1211-0002`(1)، `2110-0001`(2)، `2131-0009`(1، موظف)، `3110-0001`(1+5) = **41 سطرًا**. أنماط `entity_type` المرصودة: `system` و`customer` و`employee` ونص فارغ — **ولا سطر واحد بنمط `source` أو `shipping_company`، ولا سطر على بادئتيّ `2141%` (المصادر) أو `2151%` (شركات الشحن)**.
+
+**الخلاصة:** لا SQL يلزم تنفيذها الآن؛ الفراغ في «كشف الحساب» ناتج عن عدم ترحيل أي قيد على حسابات هذه الكيانات. أي كتابة (ترحيل تجريبي أو تصحيح أعمدة) تحتاج قرار المالك صراحةً.
+
+
+---
+
+## [2026-10-19 06:36:18 +03:00] — Round E: مسوحات قراءة فقط لحالة الجلسات (AI Model: Qoder Agent) — لا DDL/DML
+
+1. **معرفة أعمدة `public.settings_general` (قراءة فقط):** `select column_name, data_type from information_schema.columns where table_schema='public' and table_name='settings_general' order by ordinal_position;` — أكّدت أن `user_session_timeout` عمود `integer` مباشر (وليس جدول key/value)، وأن `alx_api_private` يحمل `api_sessions`/`portal_sessions`/`api_refresh_tokens`.
+2. **لقطة حالة الجلسات الحيّة (قراءة فقط):** `select (select user_session_timeout from public.settings_general limit 1) as timeout_min, (select count(*) from alx_api_private.api_sessions where revoked_at is null) as staff_live_sessions, (select count(*) from alx_api_private.portal_sessions) as portal_sessions_total, (select count(*) from alx_api_private.api_refresh_tokens where revoked_at is null and used_at is null) as staff_live_refresh_tokens;` → **النتيجة:** `timeout_min=5`، `staff_live_sessions=0`، `portal_sessions_total=15`، `staff_live_refresh_tokens=0`.
+   - **القراءة:** مهلة الموظف 5 دقائق (أقلّ من رمز الوصول 600 ث) هي جوهر العطل؛ صفر جلسات موظف حيّة وقت القياس يعني أن الكنّاس يمسح الخامل كما هو مصمَّم؛ جلسات البوابة (15) تبقى لأن جلسة العميل لا تُنهي بالخمول بعد الإصلاح.
+   - **لم يُنفَّذ أي كتابة:** لا `UPDATE settings_general` (المالك اختار إبقاء 5)، لا `DELETE` صفوف، لا تغيير مخطط. كل ما سبق `SELECT`/`information_schema` فقط.
+
+---
+
+## 2026-10-19 — الجولة F: أوامر SQL قراءة فقط (Qoder Agent) — تنفيذ: SELECTات عبر Supabase MCP على المشروع `ejrojwbbflzchasvgexr`
+
+لا أمر تعديل ولا DDL في هذه الجولة. الأوامر أدناه هي التحققات التي بُنيت عليها القرارات.
+
+### 1) 2026-10-19 21:18 — قيود المفاتيح الأجنبية على `couriers`/`customers`
+```sql
+SELECT tc.table_name, kcu.column_name, ccu.table_name AS foreign_table, ccu.column_name AS foreign_column
+FROM information_schema.table_constraints AS tc
+JOIN information_schema.key_column_usage AS kcu ON kcu.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'
+  AND tc.table_name IN ('couriers','customers')
+ORDER BY tc.table_name;
+```
+النتيجة: `couriers.account_id → accounts.account_id` و`customers.account_id → accounts.account_id`.
+
+### 2) 2026-10-19 21:21 — قاعدة الحذف للمراجعين إلى `customers`/`couriers`
+```sql
+SELECT confrelid::regclass::text AS parent, conrelid::regclass::text AS child, confdeltype
+FROM pg_constraint
+WHERE contype = 'f' AND confrelid IN ('public.customers'::regclass, 'public.couriers'::regclass)
+ORDER BY parent, child;
+```
+النتيجة: `orders` و`portal_users` جميعها `confdeltype = 'n'` (ON DELETE SET NULL) — فلا DDL مطلوب للحذف النهائي، وحُارس حساب البوابة أُنشئ في الـAPI.
+
+### 3) 2026-10-19 21:29 — جاهزية المسار المشترك والمنح
+```sql
+SELECT (SELECT count(*) FROM alx_api_private.portal_sessions WHERE expires_at > now()) AS live_portal_sessions,
+       (SELECT count(*) FROM information_schema.role_table_grants
+         WHERE grantee = 'alx_api_runtime' AND table_schema = 'public'
+           AND table_name = 'portal_users' AND privilege_type = 'SELECT') AS runtime_select_portal_users,
+       (SELECT count(*) FROM public.customers WHERE is_active IS FALSE) AS archived_customers,
+       (SELECT count(*) FROM public.acc_sub_group
+         WHERE entity_type = 'courier' AND is_active IS TRUE AND allows_direct_accounts IS TRUE) AS courier_groups;
+```
+النتيجة: 9 جلسات بوابة حيّة (كلها مسمّرة بنافذة 5 دقائق قبل الإصلاح)، المنح موجود (1)، عميلان مؤرشفان من حذف قديم لم ينفّذ، ومجموعة حسابات واحدة نشطة لنوع `courier`.
+
+### 4) لم يُنفَّذ (اختياري للمالك — كتابة بيانات)
+```sql
+UPDATE alx_api_private.portal_sessions SET expires_at = now() + interval '30 days'
+ WHERE expires_at < now() + interval '30 days';
+```
+
+## 2026-10-19 23:46 — الجولة G: سجل أوامر SQL المنفّذة على قاعدة البيانات
+
+**النموذج المنفذ:** Qoder Agent (session b99c0e85) — **المشروع:** SWIFTSHIP_SYSTEM
+**المشروع Supabase:** `ejrojwbbflzchasvgexr` — **الصلاحية المستخدمة:** قراءة فقط
+**حالة الدفعة:** لا DDL ولا DML ولا تغيير بيانات — كل العبارات أدناه `SELECT`/`EXPLAIN` فقط.
+
+### 1) 2026-10-19 23:11 — فحص أولي للفهارس عبر pg_indexes (routed through MCP execute_sql)
+```sql
+SELECT i.tablename, i.indexname, i.indisunique, x.n_live_tup AS live_rows
+  FROM pg_indexes i
+  LEFT JOIN pg_stat_user_tables x ON x.relname = i.tablename AND x.schemaname = i.schemaname
+ WHERE i.schemaname='alx_api_private'
+   AND i.tablename IN ('portal_refresh_tokens','portal_sessions','portal_auth_events')
+ ORDER BY i.tablename, i.indexname;
+```
+النتيجة: رُفض — `pg_indexes` لا يملك عمود `indisunique` (خطأ أعمدة). استُبدل بالعبارة 3.
+
+### 2) 2026-10-19 23:13 — محاولة الفهرسة عبر pg_class/pg_index (فشلت بصيغة العمود)
+```sql
+SELECT c.relname AS tbl, ix.indisunique AS uniq, i.relname AS idx, i.relamname AS am, s.n_live_tup AS rows
+  FROM pg_class c JOIN pg_index x ON x.indrelid=c.oid JOIN pg_class i ON i.oid=x.indexrelid
+  JOIN pg_am i2 ON i2.oid=i.relam
+  JOIN LATERAL (SELECT 1) dummy ON true
+  LEFT JOIN pg_stat_user_tables s ON s.relname=c.relname AND s.schemaname=c.relnamespace::regnamespace::text
+ WHERE c.relnamespace='alx_api_private'::regnamespace
+   AND c.relname IN ('portal_refresh_tokens','portal_sessions')
+ ORDER BY c.relname, i.relname;
+```
+النتيجة: رُفض — `missing FROM-clause entry for table "ix"`. استُبدل بالعبارة 3 الناجحة.
+
+### 3) 2026-10-19 23:15 — الفحص الناجح للفهاريس والأحجام (read-only)
+```sql
+SELECT c.relname AS tbl, x.indisunique AS uniq, i.relname AS idx, s.n_live_tup AS rows
+  FROM pg_class c
+  JOIN pg_index x ON x.indrelid = c.oid
+  JOIN pg_class i ON i.oid = x.indexrelid
+  LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
+ WHERE c.relnamespace = 'alx_api_private'::regnamespace
+   AND c.relname IN ('portal_refresh_tokens','portal_sessions')
+ ORDER BY c.relname, i.relname;
+```
+النتيجة: الفهارس المطلوبة كلها موجودة، ومنها فهرس فريد على `token_hash` ⇒ **لا حاجة لأي ترحيل أو إنشاء فهرس**.
+- `portal_refresh_tokens`: `portal_refresh_tokens_pkey`، `portal_refresh_tokens_hash_uidx` (f unique)، `portal_refresh_tokens_family_idx` — 56 صفًا حيًّا.
+- `portal_sessions`: `portal_sessions_pkey`، `portal_sessions_user_expiry_idx` — 4 صفوف حيّة.
+
+### 4) 2026-10-19 23:23 — التحقق من عبارة الدوران الجديدة بـ EXPLAIN (بلا تنفيذ فعلي)
+```sql
+EXPLAIN
+WITH consumed AS (
+   UPDATE alx_api_private.portal_refresh_tokens r
+      SET used_at = '2026-10-19T20:00:00Z'
+    WHERE r.token_hash = 'nonexistent-hash'
+      AND r.used_at IS NULL
+      AND r.revoked_at IS NULL
+      AND r.expires_at > '2026-10-19T20:00:00Z'
+      AND EXISTS (
+        SELECT 1 FROM alx_api_private.portal_sessions s
+         WHERE s.session_id = r.session_id AND s.revoked_at IS NULL AND s.expires_at > '2026-10-19T20:00:00Z'
+      )
+    RETURNING r.token_id, r.session_id, r.portal_user_id, r.family_id
+), issued AS (
+   INSERT INTO alx_api_private.portal_refresh_tokens
+     (token_id, session_id, portal_user_id, family_id, parent_token_id, token_hash, created_at, expires_at)
+   SELECT 'expl-id', c.session_id, c.portal_user_id, c.family_id, c.token_id, 'expl-hash', '2026-10-19T20:00:00Z', '2026-11-18T20:00:00Z'
+     FROM consumed c
+    RETURNING token_id
+), linked AS (
+   UPDATE alx_api_private.portal_refresh_tokens r
+      SET replaced_by_token_id = 'expl-id'
+    WHERE r.token_id = (SELECT token_id FROM consumed)
+    RETURNING 1
+), renewed AS (
+   UPDATE alx_api_private.portal_sessions s
+      SET expires_at = '2026-11-18T20:00:00Z', last_used_at = '2026-10-19T20:00:00Z', device_name = NULL, user_agent = NULL, ip_address = NULL
+    WHERE s.session_id = (SELECT session_id FROM consumed)
+      AND s.revoked_at IS NULL
+    RETURNING 1
+)
+SELECT (SELECT token_id FROM consumed) AS "consumedTokenId";
+```
+النتيجة: رُفض عند التحليل — `invalid input syntax for type uuid: "expl-id"` (معامل وهمي في نصّ المسبار فقط، لا في كود الإنتاج).
+
+### 5) 2026-10-19 23:24 — إعادة الـ EXPLAIN بمعاملات uuid حقيقية (خطة سليمة)
+```sql
+EXPLAIN
+WITH consumed AS (
+   UPDATE alx_api_private.portal_refresh_tokens r
+      SET used_at = '2026-10-19T20:00:00Z'
+    WHERE r.token_hash = 'nonexistent-hash' AND r.used_at IS NULL AND r.revoked_at IS NULL
+      AND r.expires_at > '2026-10-19T20:00:00Z'
+      AND EXISTS (SELECT 1 FROM alx_api_private.portal_sessions s WHERE s.session_id = r.session_id AND s.revoked_at IS NULL AND s.expires_at > '2026-10-19T20:00:00Z')
+    RETURNING r.token_id, r.session_id, r.portal_user_id, r.family_id
+), issued AS (
+   INSERT INTO alx_api_private.portal_refresh_tokens
+     (token_id, session_id, portal_user_id, family_id, parent_token_id, token_hash, created_at, expires_at)
+   SELECT '11111111-1111-1111-1111-111111111111'::uuid, c.session_id, c.portal_user_id, c.family_id, c.token_id, 'expl-hash', '2026-10-19T20:00:00Z', '2026-11-18T20:00:00Z'
+     FROM consumed c RETURNING token_id
+), linked AS (
+   UPDATE alx_api_private.portal_refresh_tokens r SET replaced_by_token_id = '11111111-1111-1111-1111-111111111111'::uuid
+    WHERE r.token_id = (SELECT token_id FROM consumed) RETURNING 1
+), renewed AS (
+   UPDATE alx_api_private.portal_sessions s SET expires_at = '2026-11-18T20:00:00Z', last_used_at = '2026-10-19T20:00:00Z', device_name = NULL, user_agent = NULL, ip_address = NULL
+    WHERE s.session_id = (SELECT session_id FROM consumed) AND s.revoked_at IS NULL RETURNING 1
+)
+SELECT (SELECT token_id FROM consumed) AS "consumedTokenId";
+```
+النتيجة: نجح التحليل وأنتج خطة — `Index Scan` على فهرس `token_hash` ثم مفتح `portal_sessions_pkey`، بلا Sequential Scan.
+**ملاحظة أمان:** `EXPLAIN` بلا `ANALYZE` لا ينفّذ العبارات الفرعية أبدًا ⇒ لم تُكتب ولا تغيّرت أي بيانات، وهذا كان هدف المسبار.
+
+### 6) 2026-10-19 23:31 — مسبار زمن داخل `alx_api` (استُخدم ثم حُذف)
+- سكربت Node مؤقت (`tmp-*`) فتح اتصالات بـ `pg` بنفس مجمّع الإنتاج ونفّذ عبارة `SELECT 1` مرتين متتاليتين لقياس رحلة الذهاب وإياب.
+- القياس: **2736 ms لرحلتين** (≈1.37 s/رحلة نحو Supabase البعيد).
+- الاستنتاج: المسار القديم 8–9 رحلات ⇒ ≈11–12 s ≡ التأخير 10–22 s في HAR؛ والمسار الجديد رحلتان ⇒ ≈2.7 s.
+- لا عبارة SQL كتابة في هذا المسبار، والملف حُذف بعد التشغيل (نظافة الأدلة المؤقتة).
+
+### خلاصة قاعدة البيانات لهذه الجولة
+- **صفر تغيير دائمي**: لا ترحيل، لا جداول، لا فهارس، لا سياسات RLS، لا صلاحيات، لا UPDATE/DELETE.
+- رفع `PG_POOL_MAX` **غير مطلوب** (الحل كان في تقليل عدد الرحلات لكل طلب).
+
+---
+
+## [2026-10-20 00:25:00 +03:00] — AI Model: Gemini 3.8 Flash (Antigravity Agent)
+- **ملاحظة**: استعلامات قراءة وتحقق من ترحيلات قاعدة البيانات (خاصة ما بعد 42: 0042، 0043، 0044، 0045، 0046، 0047) وسلامة البنية والفهارس والسياسات:
+
+```sql
+-- 1. فحص وجود جدول الإعلانات portal_announcements
+SELECT table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '%announcement%';
+
+-- 2. التحقق من اكتمال حذف الجداول المكررة واليتيمة المقررة في 0042
+SELECT table_name FROM information_schema.tables WHERE table_schema='public'
+  AND table_name IN ('settings_custom_currency','settings_report_account','settings_dashboard',
+                     'settings_dashboard_metric','report_template_filter','report_exchange_rate',
+                     'report_settings','public_tracking_product','public_tracking_event','settings');
+
+-- 3. التحقق من أعمدة البديل في accounts المقررة في 0043
+SELECT column_name, data_type FROM information_schema.columns 
+WHERE table_schema='public' AND table_name='accounts' 
+  AND column_name IN ('superseded_by_account_id', 'superseded_at');
+
+-- 4. التحقق من إسقاط جداول خرائط الترحيل القديمة المقررة في 0043
+SELECT table_name FROM information_schema.tables WHERE table_schema='public'
+  AND table_name IN ('account_id_migration_map','financial_legacy_migration_map','financial_migration_exceptions','portal_user_migration_map');
+
+-- 5. التحقق من دالة ensure_entity_financial_account في 0044 وتوافق معطياتها مع الأعمدة المسطحة وعدم وجود accounts.data
+SELECT proname, proargnames, pg_get_functiondef(oid) LIKE '%accounts.data%' as has_legacy_data 
+FROM pg_proc WHERE proname = 'ensure_entity_financial_account';
+
+-- 6. التحقق من صلاحيات وسياسة حذف الجلسات لدور alx_api_runtime في 0045
+SELECT has_table_privilege('alx_api_runtime', 'alx_api_private.api_sessions', 'DELETE') AS can_delete,
+       EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'alx_api_private.api_sessions'::regclass AND polname = 'api_runtime_sessions_delete') AS policy_exists;
+
+-- 7. التحقق من دالة purge_entity_financial_footprint وتأمين ترتيب الحذف وحارس عهدة المندوب في 0046
+SELECT proname, proargnames, pg_get_functiondef(oid) LIKE '%PURGE_BLOCKED_COURIER_HAS_OPEN_CUSTODY%' as has_courier_guard 
+FROM pg_proc WHERE proname = 'purge_entity_financial_footprint';
+
+-- 8. التحقق من أعمدة تفاصيل الجهاز وصلاحيات وسياسة الحذف لجلسات البوابة في 0047
+SELECT 
+  (SELECT array_agg(column_name::text) FROM information_schema.columns WHERE table_schema='alx_api_private' AND table_name='portal_sessions' AND column_name IN ('device_name', 'user_agent', 'ip_address')) AS cols,
+  has_table_privilege('alx_api_runtime', 'alx_api_private.portal_sessions', 'DELETE') AS can_delete,
+  EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'alx_api_private.portal_sessions'::regclass AND polname = 'portal_runtime_sessions_delete') AS policy_exists;
+
+-- 9. فحص عدم وجود أي فهارس معطوبة (Invalid Indexes)
+SELECT indexrelid::regclass AS invalid_index FROM pg_index WHERE NOT indisvalid;
+
+-- 10. فحص عدم وجود أي قيود غير موثقة أو معطوبة (Invalid Constraints)
+SELECT conrelid::regclass AS table_name, conname FROM pg_constraint WHERE NOT convalidated;
+```
+
+---
+
+## [2026-10-20 00:45:00 +03:00] — AI Model: Gemini 3.8 Flash (Antigravity Agent)
+- **ملاحظة**: استعلامات تشخيص وفحص سبب خطأ 42703 عند حذف العميل:
+
+```sql
+-- 1. فحص مشغلات جدول customers
+SELECT tgname, tgfoid::regproc, tgtype, tgenabled 
+FROM pg_trigger 
+WHERE tgrelid = 'public.customers'::regclass;
+
+-- 2. استخراج كود دالة purge_entity_financial_footprint
+SELECT pg_get_functiondef(oid) 
+FROM pg_proc 
+WHERE proname = 'purge_entity_financial_footprint';
+
+-- 3. فحص القيود الخارجية المرتبطة بجدول customers
+SELECT conname, conrelid::regclass AS table_name, confdeltype 
+FROM pg_constraint 
+WHERE confrelid = 'public.customers'::regclass;
+
+-- 4. فحص أعمدة جدول portal_users والتحقق من اسم عمود ربط العميل
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_schema = 'public' AND table_name = 'portal_users';
+-- النتيجة: العمود هو linked_customer_id وليس customer_id.
+
+-- 5. فحص عينة من portal_users للتأكد من استخدام linked_customer_id
+SELECT portal_user_id, linked_customer_id FROM public.portal_users LIMIT 5;
+```

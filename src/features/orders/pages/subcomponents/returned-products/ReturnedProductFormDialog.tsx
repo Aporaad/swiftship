@@ -5,6 +5,8 @@ import type { ReturnCondition, ReturnType as ReturnedType, ReturnedProduct, Retu
 import type { ReturnOrder, ReturnOrderItem } from './types';
 import { FieldLabel } from './helpers';
 import { RETURN_INPUT_CLASS_NAME } from './constants';
+import { CurrencySelect, toCurrencySelectOptions } from '../../../../../components/common/CurrencySelect';
+import { useExchangeRates } from '../../../../../hooks/useExchangeRates';
 
 type ReturnFormData = {
   order_id?: string;
@@ -37,6 +39,9 @@ export interface ReturnedProductFormDialogProps {
 }
 
 export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = RETURN_INPUT_CLASS_NAME, editingReturn, selectedOrder, selectedOrderProducts, selectedOrderItem, setSelectedOrder, setSelectedOrderItem, setIsFormOpen, handleSaveReturn, modalFilteredOrders, orderSearchQuery, setOrderSearchQuery, handleSelectOrder, formData, setFormData, handleSelectOrderItem, submitting }: ReturnedProductFormDialogProps) {
+  // يُستدعى قبل الخروج المبكر: قواعد الخطافات لا تسمح بشرط بينهما.
+  // Called before the early return — hooks must not sit behind a condition.
+  const { activeCurrencies } = useExchangeRates();
   if (!isOpen) return null;
   return (
         <div className="fixed inset-0 z-[1000000] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 md:p-8 overflow-y-auto">
@@ -450,15 +455,14 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                         />
                       </FieldLabel>
                       <FieldLabel label={isAr ? 'عملة الاسترداد' : 'Refund Currency'}>
-                        <select
-                          value={formData.refund_currency || 'YER'}
-                          onChange={e => setFormData((f) => ({ ...f, refund_currency: e.target.value }))}
+                        <CurrencySelect
+                          isAr={isAr}
+                          currencies={toCurrencySelectOptions(activeCurrencies)}
+                          value={formData.refund_currency || orderCurrency}
+                          onChange={(refund_currency: string) => setFormData(f => ({ ...f, refund_currency }))}
                           className={inp}
-                        >
-                          <option value="YER">YER — ريال يمني</option>
-                          <option value="SAR">SAR — ريال سعودي</option>
-                          <option value="USD">USD — دولار أمريكي</option>
-                        </select>
+                          data-testid="return-refund-currency"
+                        />
                       </FieldLabel>
                     </div>
 

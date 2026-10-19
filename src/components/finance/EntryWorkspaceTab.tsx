@@ -22,6 +22,7 @@
  *    Full details modal with account ledger popup
  */
 
+import { toDateInputValue, toDateTimeInputValue } from '../../lib/dateUtils';
 import { useMemo, useState } from 'react';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
 import {
@@ -31,6 +32,7 @@ import {
   FileSpreadsheet, Printer, TrendingUp, TrendingDown, Hash, RefreshCw,
 } from 'lucide-react';
 import { financialEntryService, type FinancialEntryCategory } from '../../services/financialEntryService';
+import { currencyOptionLabel, toCurrencySelectOptions } from '../common/CurrencySelect';
 import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 
 import GeneralEntryForm from './forms/GeneralEntryForm';
@@ -346,9 +348,9 @@ export default function EntryWorkspaceTab({
     const rows = buildExportRows();
     const blob = new Blob([[rowToCsv(exportHeaders), ...rows.map(rowToCsv)].join('\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${title}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `${title}-${toDateInputValue()}.csv`; a.click(); URL.revokeObjectURL(url);
   };
-  const exportXlsFile = () => exportXls(`${title}-${new Date().toISOString().slice(0, 10)}.xls`, exportHeaders, buildExportRows());
+  const exportXlsFile = () => exportXls(`${title}-${toDateInputValue()}.xls`, exportHeaders, buildExportRows());
   const printPdf = () => {
     const w = window.open('', '_blank');
     if (!w) return;
@@ -383,7 +385,7 @@ export default function EntryWorkspaceTab({
       paymentDetails: paymentDetails.filter((d) => d.entryId === entry.id).map((d) => ({
         id: d.id, paymentMethod: d.paymentMethod as any, accountId: d.accountId,
         amountOriginal: String(d.amountOriginal), bankReference: d.bankReference || '',
-        dueAt: d.dueAt ? new Date(d.dueAt).toISOString().slice(0, 16) : '', note: d.note || '',
+        dueAt: d.dueAt ? toDateTimeInputValue(d.dueAt) : '', note: d.note || '',
       })),
       lines: draftLines,
     });
@@ -655,10 +657,13 @@ export default function EntryWorkspaceTab({
               { value: 'deferred', label: 'آجل' },
               { value: 'mixed', label: 'مختلط' },
             ]} />
-            {/* العملة — Currency */}
+            {/* العملة — قائمة موحّدة: الرمز والاسم مع استبعاد المعطّلة (currency picker rule). */}
             <FilterSelect label="العملة" value={filterCurrency} onChange={setFilterCurrency} options={[
               { value: '', label: 'كل العملات' },
-              ...currencies.map((c) => ({ value: String(c.id), label: c.code })),
+              ...toCurrencySelectOptions(currencies).map((currency) => ({
+                value: String(currency.id),
+                label: currencyOptionLabel(currency, true),
+              })),
             ]} />
             {/* الوحدة — Module */}
             <FilterSelect label="الوحدة (Module)" value={filterModuleId} onChange={setFilterModuleId} options={[

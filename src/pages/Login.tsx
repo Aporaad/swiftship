@@ -335,27 +335,27 @@ export default function Login() {
             </div>
 
             <div className="flex items-center justify-center gap-6 py-1">
-              {/* Phone item */}
-              <a
-                href="tel:785557070"
-                className="p-3 bg-[#d4af37]/5 text-[#d4af37] hover:bg-[#d4af37]/15 hover:text-white border border-[#d4af37]/20 hover:border-[#d4af37]/45 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
-                title={isAr ? "رقم الهاتف: 785557070" : "Phone: 785557070"}
-              >
-                <Phone className="w-5 h-5" />
-              </a>
+              {/* بيانات التواصل من الإعدادات العامة فقط — لا أرقام ولا بريد ثابت في الكود. */}
+              {/* Contact details come from the database settings only — no hard-coded number or mailbox. */}
+              {settings.companyPhone && (
+                <a
+                  href={`tel:${settings.companyPhone.replace(/[^\d+]/g, '')}`}
+                  className="p-3 bg-[#d4af37]/5 text-[#d4af37] hover:bg-[#d4af37]/15 hover:text-white border border-[#d4af37]/20 hover:border-[#d4af37]/45 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+                  title={isAr ? `رقم الهاتف: ${settings.companyPhone}` : `Phone: ${settings.companyPhone}`}
+                >
+                  <Phone className="w-5 h-5" />
+                </a>
+              )}
 
-              {/* Email item */}
-              <a
-                href="mailto:alxdelivery777@gmail.com"
-                className="p-3 bg-blue-500/5 text-blue-400 hover:bg-blue-500/15 hover:text-white border border-blue-500/20 hover:border-blue-500/45 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
-                title={
-                  isAr
-                    ? "البريد الإلكتروني: alxdelivery777@gmail.com"
-                    : "Email: alxdelivery777@gmail.com"
-                }
-              >
-                <Mail className="w-5 h-5" />
-              </a>
+              {settings.companyEmail && (
+                <a
+                  href={`mailto:${settings.companyEmail}`}
+                  className="p-3 bg-blue-500/5 text-blue-400 hover:bg-blue-500/15 hover:text-white border border-blue-500/20 hover:border-blue-500/45 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+                  title={isAr ? `البريد الإلكتروني: ${settings.companyEmail}` : `Email: ${settings.companyEmail}`}
+                >
+                  <Mail className="w-5 h-5" />
+                </a>
+              )}
 
               {/* WhatsApp item */}
               <a

@@ -89,7 +89,15 @@ describe('entityLedgerService — كشف الحساب عبر alx_api فقط', ()
 
     expect(mocks.readFinanceRecord).toHaveBeenCalledWith('/api/v1/operations/couriers/cou_1');
     expect(mocks.getAccountByEntityId).toHaveBeenCalledWith('cou_1', 'courier');
-    expect(ledger.party).toEqual({ id: 'cou_1', name: 'عميل اختبار', phone: '', balance: 2500 });
+    expect(ledger.party).toEqual({
+      id: 'cou_1',
+      name: 'عميل اختبار',
+      phone: '',
+      accountId: 'acc_1101',
+      accountCode: '',
+      currency: 'YER',
+      balance: 2500,
+    });
   });
 
   it('يقرأ حركات الكيان فقط عبر معامل entityId ويحل كود العملة رقميًا', async () => {
@@ -180,5 +188,56 @@ describe('entityLedgerService — كشف الحساب عبر alx_api فقط', ()
     await entityLedgerService.loadLedger('courier', 'cou_1');
 
     expect(mocks.readAllFinanceRows).not.toHaveBeenCalledWith(ORDERS_PATH, expect.anything());
+  });
+});
+
+describe('entityLedgerService — كشف المصدر وشركة الشحن', () => {
+  const ACCOUNT_MOVEMENTS_PATH = '/api/v1/finance/accounts/acc_2141/movements';
+
+  it('يقرأ حركة المصدر من حسابه المالي لا من معامل entityId', async () => {
+    mocks.getAccountByEntityId.mockResolvedValue({ id: 'acc_2141', accountCode: '2141-0009', currency: 'YER', balance: -500 });
+    routeRows[ACCOUNT_MOVEMENTS_PATH] = [movement({ transactionId: 'src_1', transType: 'Credit', amount: 500 })];
+
+    const ledger = await entityLedgerService.loadLedger('source', 'src_9', 'AMAZON');
+
+    // لا يوجد مسار سجل مفرد للمصادر في alx_api: استدعاؤه يعيد ROUTE_NOT_FOUND ويُفشل الكشف.
+    expect(mocks.readFinanceRecord).not.toHaveBeenCalled();
+    expect(mocks.getAccountByEntityId).toHaveBeenCalledWith('src_9', 'source');
+    expect(mocks.readAllFinanceRows).toHaveBeenCalledWith(ACCOUNT_MOVEMENTS_PATH);
+    expect(mocks.readAllFinanceRows).not.toHaveBeenCalledWith(MOVEMENTS_PATH, expect.anything());
+    expect(ledger.party.name).toBe('AMAZON');
+    expect(ledger.party.accountCode).toBe('2141-0009');
+    expect(ledger.lines[0]).toMatchObject({ kind: 'generic', type: 'Credit', amount: 500 });
+    expect(ledger.totals).toEqual({ debits: 0, credits: 500 });
+  });
+
+  it('يعيد كشفًا فارغًا صريحًا حين لا يملك العنصر حسابًا ماليًا', async () => {
+    mocks.getAccountByEntityId.mockResolvedValue(null);
+
+    const ledger = await entityLedgerService.loadLedger('shipping_company', 'shp_1', 'Aramex');
+
+    expect(mocks.readFinanceRecord).not.toHaveBeenCalled();
+    expect(ledger.party.name).toBe('Aramex');
+    expect(ledger.lines).toEqual([]);
+    expect(mocks.readAllFinanceRows).not.toHaveBeenCalled();
+  });
+
+  it('يفلتر سجل الحركة خادميًا بـ sourceId للمصدر وshippingCompanyId لشركة الشحن', async () => {
+    routeRows[ORDERS_PATH] = [
+      order({ orderId: 'o1', amountPaid: '200', amountRemaining: '300' }),
+      order({ orderId: 'o2', amountPaid: '50', amountRemaining: '0', createdAt: '2026-02-02T00:00:00.000Z' }),
+    ];
+
+    const sourceLog = await entityLedgerService.loadOrderLog('source', 'src_9');
+    expect(mocks.readAllFinanceRows).toHaveBeenCalledWith(ORDERS_PATH, { sourceId: 'src_9' });
+    expect(sourceLog.lines.map((line) => line.id)).toEqual(['o2', 'o1']);
+    expect(sourceLog.totals).toEqual({ orders: 2, total: 550, paid: 250, remaining: 300 });
+
+    await entityLedgerService.loadOrderLog('shipping_company', 'shp_1');
+    expect(mocks.readAllFinanceRows).toHaveBeenCalledWith(ORDERS_PATH, { shippingCompanyId: 'shp_1' });
+  });
+
+  it('يرفض معرّفًا فارغًا في سجل الحركة', async () => {
+    await expect(entityLedgerService.loadOrderLog('source', ' ')).rejects.toThrow(/Entity id is required/);
   });
 });

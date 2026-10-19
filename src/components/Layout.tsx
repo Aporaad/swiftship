@@ -79,6 +79,9 @@ export default function Layout() {
   const { role, profile, hasPermission, loading: roleLoading, sessionId } = useRole(true);
   const { settings, updateSettings, t } = useSettings();
   const isAr = settings.language === 'ar';
+  // اسم النظام من القاعدة: لا أسماء تجارية ثابتة في الكود تُظهر غير ما يملكه المالك في الإعدادات.
+  // The system name comes from the database — no hard-coded product name that can outshow the owner's settings.
+  const brandName = settings.systemName || settings.companyName || 'ALX';
   const [isPortalApprovalsOpen, setIsPortalApprovalsOpen] = useState(false);
   const [isJobApplicationsOpen, setIsJobApplicationsOpen] = useState(false);
   const [pendingPortalCount, setPendingPortalCount] = useState(0);
@@ -778,7 +781,7 @@ export default function Layout() {
         {/* Footer */}
         <footer className="h-10 border-t border-[#d4af37]/10 flex items-center px-8 justify-between text-[10px] text-slate-500 bg-black/80 backdrop-blur-md shrink-0 relative select-none">
           <div className="flex gap-4">
-            <span className="tracking-[0.1em] font-extrabold text-[#d4af37]/60">ALX DELIVER ULTRA PRO V3</span>
+            <span className="tracking-[0.1em] font-extrabold text-[#d4af37]/60">{brandName}</span>
             <span className="border-l border-slate-800 pl-4 text-slate-600 font-mono">SEC_TOKEN: FIPS-140-3</span>
           </div>
           <div className="flex items-center gap-2 font-bold tracking-widest text-[#d4af37]">
@@ -859,12 +862,12 @@ export default function Layout() {
                     </div>
                     <h4 className="text-sm font-black text-white mb-3 flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
-                      {isAr ? 'SwiftShip Enterprise V4 - بنية لوجستية معيارية' : 'SwiftShip Enterprise V4 - Logistics Infrastructure'}
+                      {isAr ? `${brandName} — بنية لوجستية معيارية` : `${brandName} — Logistics Infrastructure`}
                     </h4>
                     <p className="text-xs text-slate-400 font-bold leading-relaxed text-start">
                       {isAr
-                        ? 'منظومة SwiftShip Enterprise V4 التقنية: بنية برمجية متطورة مخصصة لأتمتة سلاسل التوريد وإدارة الأصول اللوجستية. تعتمد المنظومة بروتوكولات تشفير معيارية ومعايير حوكمة مالية متكاملة لضمان دقة البيانات وكفاءة الأداء في البيئات التشغيلية عالية الكثافة.'
-                        : 'SwiftShip Enterprise V4: An advanced technical framework dedicated to supply chain automation and logistics asset management. Utilizing standardized encryption protocols and integrated financial governance to ensure data precision and operational efficiency in high-concurrency environments.'}
+                        ? `منظومة ${brandName} التقنية: بنية برمجية متطورة مخصصة لأتمتة سلاسل التوريد وإدارة الأصول اللوجستية. تعتمد المنظومة بروتوكولات تشفير معيارية ومعايير حوكمة مالية متكاملة لضمان دقة البيانات وكفاءة الأداء في البيئات التشغيلية عالية الكثافة.`
+                        : `${brandName}: An advanced technical framework dedicated to supply chain automation and logistics asset management. Utilizing standardized encryption protocols and integrated financial governance to ensure data precision and operational efficiency in high-concurrency environments.`}
                     </p>
                     <div className="mt-4 flex gap-3">
                       <span className="px-3 py-1 bg-white/[0.03] border border-white/[0.05] rounded-full text-[9px] font-black text-slate-500 uppercase tracking-tighter">
@@ -888,7 +891,7 @@ export default function Layout() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-[#0a0a0c] border border-white/[0.03] p-5 rounded-3xl space-y-3 text-start">
                       <h5 className="text-xs font-black text-white">
-                        {settings.companyName || (isAr ? 'الكس-تراك للحلول اللوجستية' : 'Al-Xpress Logistics')}
+                        {settings.companyName || brandName}
                       </h5>
                       <p className="text-[11px] text-slate-500 font-bold leading-relaxed">
                         {isAr
@@ -897,18 +900,21 @@ export default function Layout() {
                       </p>
                     </div>
                     <div className="bg-[#0a0a0c] border border-white/[0.03] p-5 rounded-3xl space-y-3 text-start">
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                        <MapPin className="w-3.5 h-3.5 text-[#d4af37]" />
-                        <span>{settings.companyAddress || (isAr ? 'المركز الرئيسي - اليمن - صنعاء' : 'Headquarters - Yemen / KSA')}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                        <Phone className="w-3.5 h-3.5 text-[#d4af37]" />
-                        <span dir="ltr">{settings.companyPhone || '+967 785 557 070'}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                        <Globe className="w-3.5 h-3.5 text-[#d4af37]" />
-                        <span>{settings.companyWebsite || 'www.alx.luxe'}</span>
-                      </div>
+                      {[
+                        { value: settings.companyAddress, Icon: MapPin, ltr: false },
+                        { value: settings.companyPhone, Icon: Phone, ltr: true },
+                        { value: settings.companyWebsite, Icon: Globe, ltr: true },
+                      ].filter(row => row.value).map(({ value, Icon, ltr }) => (
+                        <div key={value} className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                          <Icon className="w-3.5 h-3.5 text-[#d4af37]" />
+                          <span dir={ltr ? 'ltr' : undefined}>{value}</span>
+                        </div>
+                      ))}
+                      {!settings.companyAddress && !settings.companyPhone && !settings.companyWebsite && (
+                        <span className="text-[10px] font-bold text-slate-600">
+                          {isAr ? 'لم تُسجَّل بيانات الشركة بعد — تُضاف من الإعدادات العامة' : 'No company contact data yet — add it in General Settings'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </section>

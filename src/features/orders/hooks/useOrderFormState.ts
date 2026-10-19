@@ -8,6 +8,7 @@
  * Separates form state from UI and mutation logic.
  */
 
+import { toDateInputValue } from '../../../lib/dateUtils';
 import { useState } from 'react';
 import { ORDER_DEFAULT_VALUES } from '../constants/orders.constants';
 import type {
@@ -362,7 +363,7 @@ export function useOrderFormState(
 
   /** إضافة صف شحن جديد - Add a new shipping row */
   const addShippingRow = (settings?: OrderDefaultsSettings, orderSourceType?: string) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateInputValue();
     const defaultDuration =
       orderSourceType === 'SHEIN'
         ? numberSetting(settings, 'defaultSheinDuration', 12)
@@ -371,7 +372,7 @@ export function useOrderFormState(
         : numberSetting(settings, 'defaultAppDuration', 10);
     const arrivalDate = new Date();
     arrivalDate.setDate(arrivalDate.getDate() + defaultDuration);
-    const expectedArrival = arrivalDate.toISOString().split('T')[0];
+    const expectedArrival = toDateInputValue(arrivalDate);
 
     setShippings((prev) => [
       ...prev,
@@ -427,7 +428,7 @@ export function useOrderFormState(
 
   /** إضافة صف شحن للتحديث - Add a shipping row for status update */
   const addUpdateShippingRow = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateInputValue();
     setUpdateShippings((prev) => [
       ...prev,
       {

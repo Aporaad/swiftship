@@ -533,13 +533,13 @@ export default function CouriersPage() {
     }
 
     const result = await runMutation(async () => {
-      const { accountCode, accountId } =
-        await financialAccountService.getNextAccountIdentifiers('courier');
-      const newId = 'cour_' + accountCode;
       const type = addFormData.courierType === 'sourcing' ? 'sourcing' : 'local';
       const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
+      // المعرّف والحساب يولّدهما الخادم (ensureEntityAccount) كما في المصدر/شركة الشحن: توليدهما هنا
+      // كان يرسم حساباً غير موجود بعد، فيرفض الإدراج قيد couriers_account_id_fkey (23503).
+      // The server mints the id and the financial account (ensureEntityAccount), like sources/carriers:
+      // generating them here pointed the insert at an account that did not exist yet, tripping the FK (23503).
       const courier = await staffApiDataGateway.createCourier({
-        courierId: newId,
         fullName: addFormData.fullName.trim(),
         nameAr: addFormData.fullName.trim(),
         nameEn: addFormData.fullName.trim(),
@@ -552,22 +552,9 @@ export default function CouriersPage() {
         commissionRate: Number(addFormData.commissionRate) || 0,
         currency: finCurrency,
         isActive: true,
-        accountId,
       });
+      const newId = courier.id;
       setCouriers((current) => [courier, ...current]);
-
-      let financialAccountCreated = false;
-      try {
-        await financialAccountService.createAccountForEntity(
-          'courier',
-          newId,
-          addFormData.fullName,
-          type === 'sourcing' ? (settings.defaultOrderCurrency ?? settings.currency ?? 'YER') : (settings.currency ?? 'YER')
-        );
-        financialAccountCreated = true;
-      } catch (accErr) {
-        console.warn('[Couriers] Could not create financial account:', accErr);
-      }
 
       let userCreationError: unknown;
       if (createSystemUser) {
@@ -591,7 +578,7 @@ export default function CouriersPage() {
       activityLogService.log('add_courier', addFormData.fullName, {
         courierId: newId,
         courierType: type,
-        financialAccountCreated,
+        accountId: courier.accountId ?? null,
         systemUserCreated: createSystemUser && !userCreationError,
       });
       notificationService.notify({
@@ -601,8 +588,8 @@ export default function CouriersPage() {
             ? `تم حفظ المندوب بالمعرّف ${newId}، لكن تعذر إكمال حساب المستخدم. قد يكون ملف المستخدم أُنشئ دون كلمة مرور؛ تحقق من إدارة المستخدمين أولاً ثم استخدم إعادة التعيين بصلاحية reset_passwords. لا تعِد إنشاء المندوب.`
             : `Courier ${newId} was saved, but system-user setup was incomplete. The user profile may exist without a password; check User Management first, then reset through reset_passwords. Do not recreate the courier.`)
           : (isAr
-            ? `تم تسجيل المندوب بالمعرّف ${newId}${createSystemUser ? ' وربط مستخدم النظام مع تعيين كلمة المرور عبر صلاحية reset_passwords' : ''}${financialAccountCreated ? ' وإنشاء حسابه المالي' : ''}.`
-            : `Courier ${newId} registered${createSystemUser ? ' with its system user and password set through reset_passwords' : ''}${financialAccountCreated ? ' and financial account' : ''}.`),
+            ? `تم تسجيل المندوب بالمعرّف ${newId}${createSystemUser ? ' وربط مستخدم النظام مع تعيين كلمة المرور عبر صلاحية reset_passwords' : ''}${courier.accountId ? ' وإنشاء حسابه المالي' : ''}.`
+            : `Courier ${newId} registered${createSystemUser ? ' with its system user and password set through reset_passwords' : ''}${courier.accountId ? ' and financial account' : ''}.`),
         type: userCreationError ? 'warning' : 'success',
         category: 'system'
       });
@@ -1199,21 +1186,30 @@ export default function CouriersPage() {
       <ConfirmDeletePinModal
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
-        title={isAr ? 'تعطيل حساب المندوب' : 'Deactivate Courier'}
+        title={isAr ? 'حذف المندوب نهائياً' : 'Delete Courier Permanently'}
         message={isAr
-          ? `هل أنت متأكد من تعطيل المندوب ${deletePinConfig.entityName}؟ سيبقى سجل المندوب وحسابه المالي وقيوده محفوظاً للتدقيق.`
-          : `Are you sure you want to deactivate courier ${deletePinConfig.entityName}? The courier and financial history will remain available for audit.`}
+          ? `سيتم حذف المندوب ${deletePinConfig.entityName} مع حسابه المالي وقيود وسلف الأمانة المرتبطة به نهائياً. لا يمكن التراجع عن هذه العملية.`
+          : `Courier ${deletePinConfig.entityName} will be removed permanently together with its financial account, entries and custody advances. This cannot be undone.`}
         isAr={isAr}
         onConfirm={async () => {
-          await staffApiDataGateway.deleteCourier(deletePinConfig.entityId);
-          setCouriers((current) => current.map((courier) => courier.id === deletePinConfig.entityId
-            ? { ...courier, disabled: true, isActive: false }
-            : courier));
+          try {
+            // حذف فعلي عبر API (المندوب ذو السند المفتوح يُرفض برسالة واضحة)
+            // Real delete via API; a courier with an open custody advance is refused with a clear message.
+            await staffApiDataGateway.deleteCourier(deletePinConfig.entityId);
+          } catch (error) {
+            notificationService.notify({
+              title: isAr ? 'تعذّر حذف المندوب' : 'Courier Delete Failed',
+              message: error instanceof Error ? error.message : (isAr ? 'حدث خطأ أثناء الحذف.' : 'An error occurred while deleting.'),
+              type: 'error'
+            });
+            return;
+          }
+          setCouriers((current) => current.filter((courier) => courier.id !== deletePinConfig.entityId));
           await activityLogService.log('delete_courier', deletePinConfig.entityName, { id: deletePinConfig.entityId });
           notificationService.notify({
-            title: isAr ? 'تم تعطيل المندوب' : 'Courier Deactivated',
-            message: isAr ? `تم تعطيل المندوب ${deletePinConfig.entityName} مع الحفاظ على بياناته المالية` : `Courier ${deletePinConfig.entityName} has been deactivated; financial history was preserved`,
-            type: 'warning'
+            title: isAr ? 'تم حذف المندوب' : 'Courier Deleted',
+            message: isAr ? `تم حذف المندوب ${deletePinConfig.entityName} نهائياً مع أثره المالي.` : `Courier ${deletePinConfig.entityName} and its financial footprint were deleted permanently.`,
+            type: 'success'
           });
         }}
       />

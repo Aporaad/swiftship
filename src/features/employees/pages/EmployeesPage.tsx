@@ -13,7 +13,7 @@ type EmployeeAccountTransaction = Record<string, unknown> & {
 
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { CurrencySelect } from '../../../components/common/CurrencySelect';
+import { CurrencySelect, toCurrencySelectOptions } from '../../../components/common/CurrencySelect';
 import {
   Search,
   Edit2,
@@ -725,7 +725,7 @@ export default function EmployeesPage() {
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'عملة الراتب' : 'Currency'}</label>
                   <CurrencySelect
                     isAr={isAr}
-                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
+                    currencies={toCurrencySelectOptions(activeCurrencies)}
                     value={addFormData.currency}
                     onChange={currency => setAddFormData({ ...addFormData, currency })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
@@ -920,7 +920,7 @@ export default function EmployeesPage() {
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'عملة الراتب' : 'Currency'}</label>
                   <CurrencySelect
                     isAr={isAr}
-                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
+                    currencies={toCurrencySelectOptions(activeCurrencies)}
                     value={editFormData.currency}
                     onChange={currency => setEditFormData({ ...editFormData, currency })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
@@ -1093,13 +1093,24 @@ export default function EmployeesPage() {
           : `Permanently delete employee ${deletePinConfig.entityName} and linked financial records?`}
         isAr={isAr}
         onConfirm={async () => {
-          // حذف الموظف عبر API — Delete employee via API (soft-delete)
-          await staffApiDataGateway.deleteEmployee(deletePinConfig.entityId);
+          try {
+            // حذف فعلي عبر API: الصف والقيمة المالية المرتبطة به.
+            // Real delete via API: the row plus its financial footprint.
+            await staffApiDataGateway.deleteEmployee(deletePinConfig.entityId);
+          } catch (error) {
+            notificationService.notify({
+              title: isAr ? 'تعذّر حذف الموظف' : 'Employee Delete Failed',
+              message: error instanceof Error ? error.message : (isAr ? 'حدث خطأ أثناء الحذف.' : 'An error occurred while deleting.'),
+              type: 'error'
+            });
+            return;
+          }
+          setEmployees((current) => current.filter((employee) => employee.id !== deletePinConfig.entityId));
           await activityLogService.log('delete_user', deletePinConfig.entityName, { employeeId: deletePinConfig.entityId });
           notificationService.notify({
-            title: isAr ? 'تم تعطيل الموظف' : 'Employee Deactivated',
-            message: isAr ? `تم تعطيل الموظف ${deletePinConfig.entityName} وإيقاف حسابه` : `Employee ${deletePinConfig.entityName} has been deactivated`,
-            type: 'warning'
+            title: isAr ? 'تم حذف الموظف' : 'Employee Deleted',
+            message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} نهائياً مع سجله المالي.` : `Employee ${deletePinConfig.entityName} and their financial history were deleted permanently.`,
+            type: 'success'
           });
         }}
       />

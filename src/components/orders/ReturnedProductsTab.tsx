@@ -4,6 +4,7 @@
  * Tab for managing returned products from customers
  */
 
+import { toDateInputValue } from '../../lib/dateUtils';
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
@@ -275,7 +276,7 @@ export default function ReturnedProductsTab({
       is_insured: Boolean(ret.is_insured),
       insurance_refund: ret.insurance_refund || 0,
       notes: ret.notes || '',
-      returned_at: ret.returned_at ? String(ret.returned_at).split('T')[0] : new Date().toISOString().split('T')[0],
+      returned_at: ret.returned_at ? String(ret.returned_at).split('T')[0] : toDateInputValue(),
       processed_by: ret.processed_by || '',
       processed_at: ret.processed_at || '',
     });

@@ -1,4 +1,5 @@
 import { ApiClient } from '../../../data/http/api-client';
+import { subscribePollingChannel } from '../../../data/http/polling-channel';
 
 type ApiEnvelope<T> = { success: true; data: T };
 type SourceRow = Record<string, unknown> & { id: string };
@@ -33,6 +34,8 @@ type SourcesHandlers = {
   onData: (data: { sources: SourceRow[]; shippingCompanies: ShippingCompanyRow[] }) => void;
   onError?: (error: unknown) => void;
 };
+
+type SourcesSnapshot = Parameters<SourcesHandlers['onData']>[0];
 
 const client = new ApiClient({
   baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
@@ -100,23 +103,19 @@ export const sourcesApiDataGateway = {
   },
 
   subscribe(handlers: SourcesHandlers): () => void {
-    let disposed = false;
-    const refresh = async () => {
-      try {
+    // مصدر واحد للمصادر وشركات الشحن يغذّي كل الشاشات المشتركة فيهما.
+    // One load of sources and shipping companies feeds every screen that shows them.
+    return subscribePollingChannel<SourcesSnapshot>(
+      'sources-and-shipping-companies',
+      async () => {
         const [sources, shippingCompanies] = await Promise.all([
-          this.getSources().catch(() => []),
-          this.getShippingCompanies().catch(() => []),
+          this.getSources().catch(() => [] as SourceRow[]),
+          this.getShippingCompanies().catch(() => [] as ShippingCompanyRow[]),
         ]);
-        if (!disposed) handlers.onData({ sources, shippingCompanies });
-      } catch (error) {
-        if (!disposed) handlers.onError?.(error);
-      }
-    };
-    void refresh();
-    const interval = setInterval(() => void refresh(), 30_000);
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
+        return { sources, shippingCompanies };
+      },
+      handlers.onData,
+      handlers.onError ?? (() => undefined),
+    );
   },
 };

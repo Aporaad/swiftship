@@ -1,3 +1,4 @@
+import { toDateInputValue } from '../../lib/dateUtils';
 import React from 'react';
 import { Plus, AlertCircle, Calendar, Trash2 } from 'lucide-react';
 import type { OrderRecord, ShippingRow, UpdateFormData } from '../../features/orders/types';
@@ -109,7 +110,7 @@ export default function UpdateStatusModal({
   });
 
   const addUpdateShippingRow = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateInputValue();
     setUpdateShippings([
       ...(updateShippings || []),
       {
@@ -381,7 +382,7 @@ export default function UpdateStatusModal({
                                   if (!isNaN(days)) {
                                     const dateObj = new Date(newDate);
                                     dateObj.setDate(dateObj.getDate() + days);
-                                    expected = dateObj.toISOString().split('T')[0];
+                                    expected = toDateInputValue(dateObj);
                                   }
                                 }
                                 updateUpdateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
@@ -415,7 +416,7 @@ export default function UpdateStatusModal({
                                   if (!isNaN(days)) {
                                     const dateObj = new Date(sh.shippingDate);
                                     dateObj.setDate(dateObj.getDate() + days);
-                                    expected = dateObj.toISOString().split('T')[0];
+                                    expected = toDateInputValue(dateObj);
                                   }
                                 }
                                 updateUpdateShippingRow(idx, { shippingDuration: durationVal, expectedArrival: expected });

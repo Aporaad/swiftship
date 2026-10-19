@@ -11,17 +11,24 @@
  * - Fallback آمن في حال عدم الاتصال.
  */
 
+import { createAccessTokenRefresher } from '../data/http/session-refresh';
+
 // ── الثوابت ──────────────────────────────────────────────────────────────────
+// المسار الافتراضي هو منفذ alx_api نفسه: تركه فارغًا يرسل طلبات الدخول إلى خادم الواجهة فيردّها 404.
+// The fallback is alx_api's own port; leaving it empty sends login requests to the web server, which answers 404.
 const ALX_API_URL = (
   typeof window !== 'undefined'
     ? ((import.meta as any).env?.VITE_ALX_API_URL ?? '')
     : (typeof process !== 'undefined' ? process.env['ALX_API_URL'] ?? '' : '')
-) as string;
+) as string || 'http://127.0.0.1:3001';
 
 const TOKEN_STORAGE_KEY = 'alx_access_token';
 const ALT_TOKEN_STORAGE_KEY = 'alx_api_access_token';
 const REFRESH_TOKEN_STORAGE_KEY = 'alx_refresh_token';
 const SESSION_ID_KEY = 'alx_session_id';
+// نهاية نافذة الخمول التي يحددها الإعداد: يعرفها العميل فيجدّد بصمت قبل انقطاعها.
+// The idle deadline the server computed from settings: the client renews before it lapses.
+const SESSION_EXPIRES_KEY = 'alx_session_expires_at';
 
 // ── Token Management ──────────────────────────────────────────────────────────
 
@@ -44,12 +51,18 @@ export function getStoredRefreshToken(): string | null {
 }
 
 /** تخزين Tokens بعد تسجيل الدخول أو تجديد التوكن */
-export function storeTokens(accessToken: string, refreshToken: string, sessionId?: string): void {
+export function storeTokens(
+  accessToken: string,
+  refreshToken: string,
+  sessionId?: string,
+  sessionExpiresAt?: string,
+): void {
   try {
     sessionStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
     sessionStorage.setItem(ALT_TOKEN_STORAGE_KEY, accessToken);
     sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
     if (sessionId) sessionStorage.setItem(SESSION_ID_KEY, sessionId);
+    if (sessionExpiresAt) sessionStorage.setItem(SESSION_EXPIRES_KEY, sessionExpiresAt);
   } catch {
     // Safe fallback — session storage unavailable
   }
@@ -62,6 +75,7 @@ export function clearTokens(): void {
     sessionStorage.removeItem(ALT_TOKEN_STORAGE_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     sessionStorage.removeItem(SESSION_ID_KEY);
+    sessionStorage.removeItem(SESSION_EXPIRES_KEY);
   } catch {
     // Safe fallback
   }
@@ -73,6 +87,25 @@ export function getSessionId(): string | null {
     return sessionStorage.getItem(SESSION_ID_KEY);
   } catch {
     return null;
+  }
+}
+
+/** موعد انتهاء نافذة الخمول الحالية (ISO)، أو null إن لم تُعرف. */
+export function getSessionExpiresAt(): string | null {
+  try {
+    return sessionStorage.getItem(SESSION_EXPIRES_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** يخزّن نهاية نافذة الخمول التي أعادها الخادم بعد تمديد صامت، دون لمس التوكنات.
+ *  Stores the idle deadline the server returned after a silent renewal, leaving the tokens untouched. */
+export function setSessionExpiresAt(sessionExpiresAt: string): void {
+  try {
+    sessionStorage.setItem(SESSION_EXPIRES_KEY, sessionExpiresAt);
+  } catch {
+    // Safe fallback — session storage unavailable
   }
 }
 
@@ -119,54 +152,24 @@ export class AlxApiError extends Error {
 
 // ── دالة التجديد التلقائي للـ Access Token ────────────────────────────────────
 
-let refreshPromise: Promise<string | null> | null = null;
+/**
+ * التجديد يمر بالمجدد المشترك وحده: نسخة ثانية من المنطق كانت تُمسح عندها الجلسة
+ * عند أي خطأ عارض (429/5xx)، وكان التجديدان المتزامنان يحرّضان كشف إعادة استخدام
+ * رمز التجديد فتنقطع الجلسة.
+ * Refreshing delegates to the single shared refresher: a second copy of this logic
+ * wiped the session on any transient 429/5xx, and two concurrent refreshers tripped
+ * the refresh-token reuse guard, which ended the session.
+ */
+// يُنشأ المجدد عند أول طلب لا عند تحميل الوحدة: الجلسة الدائرية بين الملفين
+// تجعل الاستيراد وقت التهيئة يتعثّر.
+// Built on first use, not at module load: the import cycle between these two files
+// makes an init-time call unsafe.
+let sharedRefresher: (() => Promise<string | null>) | null = null;
 
-/** تجديد Access Token تلقائيًا باستخدام Refresh Token */
 async function refreshAccessToken(): Promise<string | null> {
-  // منع التجديد المتعدد في نفس الوقت
-  if (refreshPromise) return refreshPromise;
-
-  const refreshToken = getStoredRefreshToken();
-  if (!refreshToken || !ALX_API_URL) return null;
-
-  refreshPromise = (async () => {
-    try {
-      const response = await fetch(`${ALX_API_URL}/api/v1/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Request-Id': generateRequestId(),
-        },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (!response.ok) {
-        // Refresh Token منتهي أو ملغى — مسح الجلسة
-        clearTokens();
-        return null;
-      }
-
-      const result = (await response.json()) as ApiResult<{
-        accessToken: string;
-        refreshToken: string;
-        sessionId: string;
-      }>;
-
-      if (!result.success) {
-        clearTokens();
-        return null;
-      }
-
-      storeTokens(result.data.accessToken, result.data.refreshToken, result.data.sessionId);
-      return result.data.accessToken;
-    } catch {
-      return null;
-    } finally {
-      refreshPromise = null;
-    }
-  })();
-
-  return refreshPromise;
+  if (!ALX_API_URL) return null;
+  sharedRefresher ??= createAccessTokenRefresher(ALX_API_URL);
+  return sharedRefresher();
 }
 
 // ── دالة الطلب الرئيسية ───────────────────────────────────────────────────────

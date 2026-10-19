@@ -161,17 +161,14 @@ export class AlxApiAuthGateway implements AuthGateway {
         };
       }
     }
+    // الملف يأتي من قاعدة البيانات؛ غيابه يعني فشل الدخول ولا تُختلق صلاحيات جذر.
+    // The profile comes from the database; if it is missing the sign-in failed — never invent root rights.
+    if (!userProfile) {
+      throw new Error('AUTH_USER_DATA_MISSING');
+    }
     const loginResultWithUser: AlxLoginResult = {
       ...result,
-      user: userProfile ?? {
-        userId: 'usr_root',
-        username: identifier,
-        email: identifier.includes('@') ? identifier : null,
-        fullName: identifier,
-        role: 'Admin',
-        isRoot: true,
-        disabled: false,
-      },
+      user: userProfile,
     };
     this.pendingLoginResult = loginResultWithUser;
     return mapAlxUserToCurrentDto(loginResultWithUser);

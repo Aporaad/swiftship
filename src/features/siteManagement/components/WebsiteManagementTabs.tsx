@@ -23,12 +23,12 @@ export const WebsiteManagementTabs: React.FC<WebsiteManagementTabsProps> = (prop
       <div className="flex items-center gap-2 border-b border-[#d4af37]/15 pb-2 overflow-x-auto custom-scrollbar">
         {[
           { id: 'analytics', label: isAr ? '📊 شاشة المراقبة والإحصائيات' : 'Monitoring & Analytics', badge: null },
-          { id: 'portal_users', label: isAr ? '👥 مستخدمين الموقع (portal_users)' : 'Portal Users', badge: portalUsers.length },
+          { id: 'portal_users', label: isAr ? '👥 مستخدمين الموقع' : 'Portal Users', badge: portalUsers.length },
           { id: 'pending', label: isAr ? '⏳ اعتماد الحسابات المعلقة' : 'Pending Approvals', badge: pendingUsers.length },
           { id: 'orders', label: isAr ? '📦 طلبات البوابة' : 'Portal Orders', badge: portalOrders.length },
           { id: 'tickets', label: isAr ? '🎧 الشكاوى والاقتراحات' : 'Support Tickets', badge: tickets.filter(t => t.status === 'open').length },
           { id: 'announcements', label: isAr ? '📢 الإعلانات والعروض' : 'Announcements', badge: announcements.length },
-          { id: 'jobs', label: isAr ? '💼 طلبات التوظيف (jobs_req)' : 'Job Applications', badge: pendingJobs.length },
+          { id: 'jobs', label: isAr ? '💼 طلبات التوظيف' : 'Job Applications', badge: pendingJobs.length },
           { id: 'security', label: isAr ? '🛡️ أمان وإدارة الموقع' : 'Website Security', badge: null },
           { id: 'api', label: isAr ? '🔗 ربط API والـ Webhooks' : 'API & Webhooks', badge: null },
         ].map(tab => (

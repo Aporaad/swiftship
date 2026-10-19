@@ -3518,3 +3518,265 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
    - اختبارات `alx_api`: اجتياز **43 suite** و **391 test** بنسبة نجاح 100% (0 failures).
    - فحص أنواع `alx_api`: `npm run check` (`tsc --noEmit`) نظيف تماماً (0 errors).
    - الالتزام التام بمعايير Clean Code، فصل Business Logic عن UI، نمط التسمية camelCase في الكود و snake_case في قاعدة البيانات، والتوثيق المزدوج (عربي وإنجليزي).
+
+---
+
+## [2026-10-18 03:14:24 +03:00] — إصلاح تسجيل الدخول + المرحلة #2 (جلب البيانات) + الجلسات/العملات/الزمن (AI Model: Qoder Agent)
+
+### 1) تسجيل الدخول كان يفشل بسبب CORS (العطب الحاد)
+- **السبب الجذري**: `alx_api/.env → CORS_ORIGINS` يسمح بـ `http://localhost:3000` فقط. المتصفح يعامل `http://127.0.0.1:3000` وأصل `localhost` كمصدرين مختلفين، فكان `OPTIONS /api/v1/auth/login` يرجع **403** ولا يصل طلب الدخول أصلًا.
+- **الحل في الكود** (`alx_api/src/app.ts`): دالتان جديدتان `loopbackAlias(origin)` و`isAllowedOrigin(environment, origin)`. القاعدة: القائمة المسموحة هي المرجع دائمًا، وتُقبل نسخة التوأم المحلي **في التطوير فقط** (`nodeEnv !== 'production'`)؛ الإنتاج يبقى حرفيًا بلا أي تسامح.
+- **التحقق الحيّ**: preflight → 204 لـ `localhost:3000` و`127.0.0.1:3000`، و403 لـ `127.0.0.1:9999` و`https://evil.example`؛ ثم `POST /api/v1/auth/login` بجسم فارغ → 400 `INVALID_AUTH_INPUT` مع `Access-Control-Allow-Origin` و`Access-Control-Allow-Credentials: true` (تحقق الحقلي قبل فحص الاعتمادات، فلا تسجيل محاولات فاشلة ولا قفل حساب).
+- **تحصين مسار الدخول** (`src/lib/alxApiClient.ts`): كان العنوان يُقرأ من البيئة بلا افتراضي، فطلب غير مُضبوط يذهب لخادم الواجهة ويردّ 404. أُضيف الافتراضي `http://127.0.0.1:3001` ليطابق `src/data/http/app-api-client.ts`.
+
+### 2) المرحلة #2: معالجة بطء الجلب وانقطاعه في كل الأقسام
+- **جديد** `src/data/http/polling-channel.ts`: قناة استطلاع مشتركة بمعرف (`Map`) — طلب واحد لكل دورة (single-flight)، إعادة آخر نتيجة فور الاشتراك (first paint أسرع)، مؤقّت واحد يُوقَف عند آخر مستمع. الثابت `DEFAULT_POLL_INTERVAL_MS = 30_000`.
+- **البوابات المحوَّلة** (إلغاء `setInterval` الخاص بها): `couriersApiDataGateway`, `customersApiDataGateway`, `sourcesApiDataGateway` (مفتاح `sources-and-shipping-companies` مع نوع `SourcesSnapshot`), `usersApiDataGateway`, `staffApiDataGateway` (مفتاح مبني من خيارات `includeEmployees/includeOrders/includeAccounts`), `ordersApiDataGateway` (مفتاح لكل `readPath` + `auto-entry-rules` للإعدادات), `reportsApiDataGateway` (`reports-core-data`), و`FinanceApiDataGateway` (المجموعات + حركة الحساب `movements:<accountId>`).
+- **الأثر**: الصفحات المتعددة التي كانت تفتح نفس القسم تُجري الآن طلبًا واحدًا بدل N؛ وقيود القيود التلقائية تُقرأ كاملة (`limit=1000`) بدل صفحة 100 التي كانت تُسقط القواعد بصمت.
+- **مهلة القراءة** (`src/data/http/api-client.ts`): إضافة خيار `readTimeoutMs` وخصتين `writeTimeoutMs`/`readTimeoutMs`؛ القراءة 30 ثانية والكتابة 10، مع `Math.max` كي لا تكون قراءة أقصر من الكتابة. الإلغاء عند 10 ثوانٍ لصفحات `limit=1000` كان مصدر «انقطاع البيانات» المبلَّغ.
+- **خرائط المجموعات** (`src/components/financeAccounting/FinanceApiDataGateway.ts`): إضافة `assets`, `salary_history`, `employees` إلى `apiCollectionPaths` ومفاتيح المعرّفات `collectionIdKeys` (`autoEntryId`, `assetId`, `salaryHistoryId`, `employeeId`) — أزال ثلاث رسائل `FINANCE_API_COLLECTION_UNSUPPORTED`.
+- **تبويب الرواتب** (`src/components/financeAccounting/useFinanceAccountingData.ts`): يشترك الآن في `employees` بدل `users` لأن صفوف الراتب مرتبطة بـ `employeeId`.
+
+### 3) دورة حياة التوكن والحذف الفوري للجلسات وحقائق الجهاز
+- **`alx_api/src/core/auth/session-policy.ts` (جديد)**: نافذة الخمول تُحسب من `user_session_timeout` الإعدادي — مصدر وحيد للمهلة يستدعيه `auth.factory.ts` و`server.ts`، فلا `expires_at` شهرية عشوائية.
+- **`alx_api/src/modules/auth/drizzle-auth.repository.ts`**: `deleteExpiredSessions` + `deleteExpiredSessionsFor` يَحذفان الصفوف المنتهية فعليًا (`DELETE ... RETURNING`) لا يعطّلانها، ويسبقهما حارس `mayDeleteSessions()`؛ بلا صلاحية DELETE تبقى الصفوف خاملة لا تُصادَق عليها (لا خطر أمني) والصيانة لا تُفشل الدخول أبدًا (best effort).
+- **`alx_api/src/core/http/request-context.ts` (جديد)**: استخراج `device_name`, `user_agent`, `ip_address` من ترويسات الطلب وتمريرها لصف الجلسات في `api_sessions` و`portal_sessions` — الحقول كانت تُترك فارغة رغم أهميتها التدقيقية.
+- **`src/data/http/session-keepalive.ts` (جديد)** + ربطه في `src/features/auth/AuthSessionProvider.tsx`: تجديد صامت قبل نهاية النافذة دون شعور المستخدم بانقطاع، ويتوقف عند انتهاء المدة أو تسجيل الخروج.
+
+### 4) بقية بنود الخطة
+- **الهوية من قاعدة البيانات**: مسار إعدادات عام للعلامة التجارية (`alx_api/src/modules/settings/settings.routes.ts:17`) يعرض `system_name`/`system_logo`/`company_*` لشاشة الدخول بدل قيم ثابتة، مع خرائط الحقول في `settings.repository.ts`.
+- **المنطقة الزمنية**: `src/lib/dateUtils.ts` أعيد بناؤها على `Intl` مع منطقة عرض قابلة للإعداد، و`src/lib/timezones.ts` + قائمة `TIME_ZONE_OPTIONS` و`GeneralSettingsTab.tsx` تضيف الخيار وتعاين الناتج، و`SettingsContext.tsx` يبث `setDisplayTimeZone`.
+- **اختيار العملات** (`src/components/common/CurrencySelect.tsx` + اختباره): يعرض الرمز والاسم المحلي والعلامة والرمز المالي مع وسم «افتراضية»، ويستبعد المعطلة (`is_active`) من العرض ومن الاختيار.
+- **الحذف الحقيقي للكيانات**: `purgeEntityRecord` (`operations.repository.ts:89-142`) يستدعي `public.purge_entity_financial_footprint` بصلاحيات المالك ويحذف صف الكيان نفسه — لا تعطيل فقط.
+- **اختبارات مضافة**: `src/components/financeAccounting/FinanceApiDataGateway.test.ts` (5): تطابق المسارات، تطبيع المعرّفات، طلب واحد لكل دورة مع مشتركَيْن، إعادة آخر لمشترك متأخر، وsingle-flight لحركة حساب واحدة. أُصلح تعارض التقاط `fetch` في `ApiClient` بـ `vi.resetModules()` + `await import()` بعد `vi.stubGlobal`.
+
+### 5) نتائج التحقق
+- الواجهة: `tsc --noEmit` نظيف، و**93 ملف / 413 اختبار** ناجح (5 skipped).
+- `alx_api`: `tsc --noEmit` نظيف، و**44 suite / 404 اختبار** ناجح.
+- الخادمان يعملان من المصدر الحيّ (`:3000` واجهة، `127.0.0.1:3001` API) فتُلتقط التعديلات بدون بناء.
+
+## [2026-10-18 23:40:15 +03:00] — تصحيح ملفات الترحيل 0044–0047 أثناء تطبيقها (AI Model: Qoder Agent)
+- **`0044_fix_entity_account_provisioning.sql`**: `CREATE OR REPLACE` رفض التطبيق بخطأ `42P13: cannot change name of input parameter "p_account_type"` — فالنسخة الحيّة تحمل الأسماء المقلوبة ولا تسمح PostgreSQL بإعادة تسمية المعطيات عبر الاستبدال. الصيغة الصحيحة: `DROP FUNCTION IF EXISTS` ثم `CREATE` بأسماء سليمة، مع `GRANT EXECUTE ... TO PUBLIC, anon, authenticated, service_role, alx_api_runtime` تعيد مصفوفة الأذونات التي كانت على الدالة القديمة (تأكدت منها من `pg_proc.proacl` قبل الإسقاط).
+- **التحقق من مواضع النداء قبل إعادة التسمية**: قُرئت أجسام التريجّرات الخمسة `link_*_financial_account` من كتالوج القاعدة الحيّة، وكلها تمرّر `(id, type, name, currency, prefix, accountType, notes)` موضعيًا، ولا يوجد نداء بالاسم من كود TypeScript ولا قيم افتراضية مستعملة — لذا التوقيع الجديد يطابق كل المنادين.
+- **`0045` و`0047`**: `CREATE POLICY IF NOT EXISTS` ليس صيغة PostgreSQL صالحة (`42601`)؛ استُبدل بحارس داخل `DO $policy$` يفحص `pg_policy` قبل الإنشاء، وهو النمط الصحيح لجعل الترحيل قابلًا لإعادة التنفيذ.
+- **`0046`**: كانت أجسام الحذف مكتوبة `'DEL' || 'ETE FROM …'` لتقسيم سلسلة DELETE. حُذفت هذه الحيلة واستُبدلت بجمل `DELETE` صريحة: إخفاء عبارة مدمِّرة عن أدوات الفحص لا يجعلها أكثر أمانًا، ويترك مراجعًا بشريًا يقرأ غموضًا مقصودًا. كما استُبدل `array_length($n,1) IS NOT NULL` بـ `cardinality(...)` و`DELETE ... EXECUTE USING` بحذف ثابت حيث لا حاجة لتداخل الأسماء، وبقي `EXECUTE format('DELETE FROM public.%I WHERE %I = $1', …)` فقط لاسم الجدول والمفتاح — وهما من قائمة `CASE` مغلقة لا من إدخال المستخدم.
+- **إزالة `BEGIN/COMMIT` الداخلية** من الملفات الأربعة: Supabase يُغلّف كل ملف ترحيل بمعاملته الخاصة، والكتلة المتداخلة كانت ستُنهي معاملته مبكرًا.
+- **الفحص بعد التطبيق**: `alx_api` — `tsc --noEmit` نظيف و**49 suite / 427 test** ناجحة. لم تتغير كود الواجهة في هذه الجولة (آخر فحص كامل: 93 ملف / 413 اختبار).
+
+## [2026-10-19 01:24:33 +03:00] — إصلاح اعتماد أول تسلسل لسعر الصرف (AI Model: Qoder Agent)
+
+### الملف `src/services/currencyService.ts`
+- **دالة جديدة `resolvePriceReference(curNo, operatorPrice?)`**: تُرجع `{price, reference:{id,seq}}` من **آخر تسلسل** موثق، وتُدرج تسلسلًا جديدًا عبر `addExchangeRatePrice` فقط عندما يكون السعر الذي كتبه المستخدم مخالفًا لآخر سعر، ثم تعيد مرجع الصف الجديد. ترمي `EXCHANGE_RATE_NOT_DOCUMENTED` إن لم يوجد سعر، وتمرّر خطأ الإدراج كما هو بدل أن تثبّت ساق على مرجع قديم.
+  - **لماذا**: كانت الدوال القائمة (`getLatestPriceReference`) تُرجع المرجع ولا تملك سياسة «السعر المعدَّل يدويًا يجب أن يُسجَّل أولًا»، فلكل نموذج أن يخترق التسلسل بنفسه — تجميع لهذا السلوك في مكان واحد (DRY).
+
+### الملف `src/components/finance/forms/CompoundEntryForm.tsx`
+- **قبل**: `currencyPrice: { id: 1, seq: 1 }` حرفيًا في كل سطر مركّب (سطر 299) — المرجع يُثبت على أول تسلسل في `cur_price`.
+- **بعد**: `priceReferences` تُحسب بـ `Promise.all` قبل بناء الحمولة: سطر عملة النظام بلا مرجع (`null`)، وكل سطر آخر يستدعي `resolvePriceReference(account.curNo, asNumber(line.exchangeRate))`؛ ويمر المرجع إلى `currencyPrice` و`accountCurrencyPrice` معًا مطابقةً لنمط `financialEntryService.buildLegacyVoucherLine`.
+- **الملاحظ**: المبالغ لم تكن خاطئة (`amountOriginal = amtAccount * rate`)؛ الخلل كان في **الإثبات التوثيقي** للساق، وهو ما يجعل القراءة اللاحقة للتكاليف تعرض أقدم سعر.
+
+### الملف `src/features/settings/pages/SettingsPage.tsx`
+- `isLatest = idx === historyEntries.length - 1` على قائمة تصل الأحدث أولًا كانت توسم **أقدم** صف بالأسعار بأنه الأحدث؛ صحت إلى `idx === 0` مع تعليق يوضح اتجاه القائمة.
+
+### ملف جديد `src/services/currencyService.test.ts`
+- 5 حالات: آخر تسلسل لا أوله، إدراج تسلسل عند المخالفة، لا إدراج عند التطابق، رفض عند غياب السعر، نشر خطأ الإدراج.
+
+### الفحص
+- `npx tsc --noEmit` (جذر التطبيق): نظيف. `npx vitest run src/services`: **29 ملفًا / 197 اختبارًا** ناجحة. لم يُمسّ `alx_api` ولا `alx_web` في هذه الجولة البرمجية.
+- `alx_api/.env` و`.env`: إضافة توأمين `127.0.0.1` إلى `CORS_ORIGINS` (المسار الافتراضي للتطوير)، والقيمة نفسها كانت تعتمد الأسماء `localhost` فقط.
+
+---
+
+## [2026-10-19 02:46:14 +03:00] — Changelog: API-only top-bar refresh, sources account column, two-tab entity statement
+
+**AI Model:** Qoder Agent — **Branch:** main — **No DB schema/data change this round.**
+
+### 1) Refresh button refreshes data, not the page
+- `src/data/http/polling-channel.ts`: كل قناة جلب تخزّن دالة التحميل الخاصة بها (`channel.refresh`) ويُصدَّر `refreshAllPollingChannels()` الذي ينادي كل القنوات الحيّة عبر `Promise.allSettled` دون انتظار المؤقّت ودون إعادة تحميل الصفحة. آخر دالة تحميل هي المسيطرة لأن كل المشتركين على المفتاح نفسه يأكلون من الطلب نفسه.
+- `src/components/layout/Header.tsx`: `useState` + `handleRefreshData` (منع التزامن بـ `isRefreshing`) بدل `window.location.reload()`؛ الأيقونة تدور `animate-spin` أثناء الجلب و`title` ثنائي اللغة.
+
+### 2) العمود المالي في قائمتي المصادر وشركات الشحن
+- `alx_api/src/modules/reporting/reporting.repository.ts`: تعريفَا `sources` و`shippingCompanies` أضافا أربعة استعلامات مرتبطة على `public.accounts` (accountCode / acc_name_ar / acc_name_en / currency) بدل JOIN لأن باني `list()` عام ولا يسمح بتغيير أسماء الأعمدة. تم التحقق من نفس الـSQL مباشرة على Supabase (SHEIN → `2141-0008`، EMS → `2151-0005` …).
+- `src/features/sources/pages/SourcesPage.tsx`: دالة `AccountCell` جديدة (DRY بين الجدولين) تعرض الرمز مع اسم الحساب، وتُبقي «ينشأ عند الحفظ» فقط حين لا يوجد حساب فعلًا. الصفوف كانت تصل بلا `accountCode` سابقًا فتبقى على النص البديل.
+
+### 3) نافذة كشف الحساب بتبويبين
+- `src/features/sources/components/EntityStatementModal.tsx` (جديد): عرض فقط؛ تبويب `order_log\|ledger`، تحميل التبويبين معًا في `Promise.all` عند الفتح، مؤشرات (عدد الطلبات/الإجمالي/المسدد/المتبقي) و(الرصيد/المدين/الدائن)، جدولان، طباعة عبر `printContent`، وتحذير صريح حين لا يملك العنصر حسابًا ماليًا.
+- `src/services/entityLedgerService.ts`: `LedgerEntityType` صار `customer|courier|source|shipping_company`؛ `OrderLogEntityType` جديد؛ `LedgerParty` أضاف `accountId/accountCode/currency`؛ استخراج `mapMovement` مشترك بين مساري الحركات (حسب الكيان / حسب الحساب)؛ حركة المصدر وشركة الشحن تُقرأ من `/api/v1/finance/accounts/:id/movements` لأن القيود التلقائية قد تحمل جهة العميل فقط؛ `buildAccountLines` يحافظ على اتجاه كل قيد كما رُمحّل؛ `loadOrderLog` يبني خلاصة الطلبات وإجمالياتها الأحدث أولًا.
+- `SourcesPage`: زر `ReceiptText` في عمود الإجراءات لكل جدول يفتح النافذة على `statementTarget`.
+
+### 4) فلترة الطلبات خادمية
+- `operations.schemas.ts` (pageQuerySchema) + `operations.contracts.ts` (PageQuery) + `operations.routes.ts` (توقيع `list`): حقلا `sourceId` و`shippingCompanyId`.
+- `operations.repository.ts → pageOrders`: `o.order_source_id = $n` و`(o.shipping_company = $n OR EXISTS (SELECT 1 FROM shipments sh WHERE sh.order_id = o.order_id AND sh.shipping_company_id = $n))` — المساران صالحان لأن`orders.shipping_company` و`shipments.shipping_company_id` يحملان المفتاح نفسه.
+
+### Tests
+- `src/services/entityLedgerService.test.ts`: تحديث توقع `party` + 4 حالات جديدة (حركة المصدر من حسابه، كشف فارغ بلا حساب، فلترة سجل الحركة ب`sourceId`/`shippingCompanyId`، رفض المعرّف الفارغ).
+- النتائج: `tsc --noEmit` (app + alx_api) نظيف؛ vitest التطبيق 94 ملف/422 اختبار (5 متخطاة كما قبل)؛ jest alx_api 49/49 مجموعة و427 اختبار.
+
+
+---
+
+## [2026-10-19 03:58:31 +03:00] — سجل تطوير: إصلاح خطأ كشف حساب المصادر/شركات الشحن + توحيد قاعدة قائمة العملة
+
+**Owner:** arslan — **AI Model:** Qoder Agent — **Scope:** تطبيق الموظف `src/` + بوابة العميل `alx_web/src/` — **Status:** Done (typecheck + tests green) — **Duration:** ~35 min
+
+### الجزء الأول — عطل نافذة كشف الحساب (Runtime 404)
+**السبب الجذري:** `entityLedgerService.loadParty()` كانت تنادى `GET /api/v1/operations/sources/:id` و`GET /api/v1/operations/shipping-companies/:id` لكل الكيانات، وهذان المسارَان غير موجودين في `alx_api` (الوحدة تنشر قائمة + كتابة بالمعرّف فقط: `POST /api/v1/operations/sources` و`PATCH/DELETE /:id`)، فيرجع الـAPI `404 ROUTE_NOT_FOUND` وتسقط النافذة في حالة الخطأ. ظهر ذلك بوضوح في `api-inspector-*.har.json` و`127.0.0.1-*.log` المرفقَيْن من المالك.
+
+**الملفات المعدّلة:**
+- [src/services/entityLedgerService.ts](src/services/entityLedgerService.ts): `PROFILE_PATH` أصبح خريطة جزئية (`Partial<Record<LedgerEntityType, string>>`) تحصر جلب السجل المفرد في `customer` و`courier` فقط؛ `loadParty(entityType, entityId, knownName)` تتخطى نداء المسار عند غيابه (`Promise.resolve(null)`) وتبني اسم الكيان من الاسم القادم من صف القائمة ثم من `account.entityName` ثم من المعرّف؛ `loadLedger(entityType, entityId, partyName = '')` تمرّر الاسم المعروف. قراءة الحساب المالي بقيت على `/api/v1/finance/accounts/by-entity` وحركة القيود على `/api/v1/finance/accounts/:id/movements` (يعمل للمصدر/شركة الشحن لأن المسارين محميَّان بـ`view_financial_accounts`/`view_account_movements`).
+- [src/features/sources/components/EntityStatementModal.tsx](src/features/sources/components/EntityStatementModal.tsx): تمرير `entityName` إلى `loadLedger` وتحديث قائمة اعتماد الـ`useEffect`؛ بقية النافذة عرضٌ فقط لم يتغيّر (حالتا الفراغ الصريحتان محفوظتان).
+- [src/services/entityLedgerService.test.ts](src/services/entityLedgerService.test.ts): حالَتا المصدر وشركة الشحن تُثبِّت الآن منع الانحدار — `expect(mocks.readFinanceRecord).not.toHaveBeenCalled()` (لا نداء مسار مفرد) مع `party.name` من الاسم المعروف؛ حالة «بلا حساب» تassert اسم `Aramex`. الملف 13 اختبارًا كلها خضراء.
+- **لم يُمَسَّ `alx_api`**: الإصلاح كامل في الطبقة الأمامية، فلا إعادة تشغيل للخدمة مطلوبة.
+
+### الجزء الثاني — قاعدة قائمة اختيار العملة في كل النظام
+**القاعدة:** كل قائمة عملة تعرض الرمز + الاسم + العلامة (🇾🇪) + وسم الافتراضية، ولا تعرض أي عملة معطّلة أبدًا. الأخطاء السابقة كانت من ثلاثة مصادر: تحويل صفوف العملات يَُسقِط الأسماء والعلامة وحالة التنشيط، `readActive()` في `CurrencySelect` يعتبر الحقل الغائب نشطًا لكن بعض القوائم تتجاوز المكوّن بقوائم `<select>` خام، وحاسبة المصارفة كانت تستخدم قائمة ثابتة `['YER','SAR','USD']`.
+
+**الملفات المضافة/المعدّلة (تطبيق الموظف):**
+- [src/shared/contracts/finance.contracts.ts](src/shared/contracts/finance.contracts.ts): توسيع `FinanceCurrency` بـ`isDefault/isActive/nameAr/nameEn/symbol/flag`، وعقد مصدر جديد `FinanceCurrencySource` يقبل الشكلين (`cur_id`/`currencyId`/`curId`/`id`، `main_name_ar`/`main_nameAR`/`mainNameAr`، `is_active`/`isActive`)، ودالة تحويل واحدة `toFinanceCurrencies()` مع `firstText()` — تصفية القيم الفارغة، و`isActive` افتراضها صحيح عند غياب الحقل، وإسقاط الصفوف بلا `code`. **إصلاح عطل حقيقي:** المعرّف كان يُقرأ من `cur_id` فقط فصي `GET /api/v1/currencies` يعيد `currencyId`، أي أن `id` كان يصير 0 (وهو ما كان سيُرسل `currency_no = 0` عند الحفظ).
+- [src/components/common/CurrencySelect.tsx](src/components/common/CurrencySelect.tsx): مُصدِّر جديد `currencyOptionLabel(currency, isAr)` يبني النص الموحّد `🇾🇪 YER — ريال يمني (﷼) — افتراضية` / `SAR — Saudi Riyal (SAR) (Default)`؛ المكوّن نفسه يستخدمه بدل تنسيق مكرّر، فيستطيع أي قائمة `<select>` خام الاستعانة به دون التنازل عن شرط عدم عرض المعطّلات.
+- [src/features/financeEntries/pages/FinanceEntriesPage.tsx](src/features/financeEntries/pages/FinanceEntriesPage.tsx): مصدر عملات صفحة القيود والسندات والعُهدة صار `toFinanceCurrencies(unwrapList(currencyResult))` بدل التحويل اليدوي المُسقِط للبيانات — وهو السبب المباشر لعدم تطبيق القاعدة على «القيود والسندات».
+- [src/components/finance/EntryWorkspaceTab.tsx:660](src/components/finance/EntryWorkspaceTab.tsx): مرشِّح العملة يبني خياراته من `toCurrencySelectOptions(currencies)` + `currencyOptionLabel(currency, true)` بدل نص خام.
+- [src/components/finance/FinancialCalculatorModal.tsx](src/components/finance/FinancialCalculatorModal.tsx): حُذف `getAvailableCurrencyCodes()` والقائمة الثابتة، وأُضيف `currencyOptions` عبر `useMemo` **قبل** `if (!isOpen) return null` (احترام ترتيب الخطافات)، والـ`<select>` الخامان استُبدلا بـ`CurrencySelect` مع الحفاظ على تنسيق الحقول الداكنة ومنطق الفلترة بالأسعار المتاحة.
+- [src/features/settings/pages/tabs/CurrencySettingsTab.tsx:71](src/features/settings/pages/tabs/CurrencySettingsTab.tsx): قائمة «العملة الرئيسية للنظام» صارت `CurrencySelect` فوق `toCurrencySelectOptions(dbCurrencies)` مع إبقاء مزامنة الرمز عند الاختيار و`disabled={!canEditRates}` (استوردت من `../../../../components/common/CurrencySelect`).
+- [src/components/ChartOfAccounts.tsx:23](src/components/ChartOfAccounts.tsx): `CURRENCY_NAME_FALLBACK` غُدّي بـ`nameEn` و`symbol` (`﷼`، `ر.س`، `$`) ليظل الدليل متسقًا عند غياب صفوف العملات.
+- [src/components/orders/EditOrderModal.tsx](src/components/orders/EditOrderModal.tsx)، [src/components/orders/PaymentModal.tsx](src/components/orders/PaymentModal.tsx)، [src/components/orders/CreateOrderModal.tsx](src/components/orders/CreateOrderModal.tsx): خصائص الحاسبة تمرَّر الآن عبر `toFinanceCurrencies(...)` بدل كائنات جزئية.
+- **اختبار قاعدة جديد:** [src/components/common/CurrencySelect.rule.test.tsx](src/components/common/CurrencySelect.rule.test.tsx) — حالتان: المُحوِّل يحمل الأسماء/الرمز/التنشيط من صفوف مختلطة snake/camel (بما فيها `currencyId`)، والقائمة تستبعد العملة المعطّلة (TRY) ونص الخيار يطابق `🇾🇪 YER — ريال يمني (﷼) — افتراضية`.
+
+**بوابة العميل `alx_web`:**
+- [alx_web/src/lib/currencyLabel.ts](alx_web/src/lib/currencyLabel.ts): مُساعِد `currencyOptionLabel(currency, isRtl)` بنفس قواعد تطبيق الموظف (نص عربي/إنجليزي حسب الاتجاه، وسم «افتراضية»/`Default`)، مع نوع `Pick<PortalCurrencyRefDto, 'code'|'nameAr'|'nameEn'|'symbol'|'flag'|'isDefault'>`.
+- أربع قوائم عملات تستخدمه الآن: [alx_web/src/components/CustomerPaymentModal.tsx:135](alx_web/src/components/CustomerPaymentModal.tsx)، [alx_web/src/components/CreateOrderModal.tsx:557](alx_web/src/components/CreateOrderModal.tsx)، [alx_web/src/components/PortalCalculatorModal.tsx:216](alx_web/src/components/PortalCalculatorModal.tsx) و[:223](alx_web/src/components/PortalCalculatorModal.tsx) (من/إلى).
+- **الاستبعاد الخدمي محفوظ:** `/api/v1/portal/currencies` تُفلتر بـ`WHERE c.is_active = true` وترتّب الافتراضية أولًا، فلا تصل عملة معطّلة إلى Portal أصلًا.
+
+### التحقق
+- `npx tsc --noEmit` نظيف في تطبيق الموظف و`alx_web` • `vitest run` التطبيق: 95 ملفًا / 424 اختبارًا (5 متخطاة كما كان) • `entityLedgerService.test.ts`: 13/13 • `alx_web` vitest: 17/17 • `alx_api` لم تتغيّر فلم تُعَد تشغيلها (jest 49 مجموعة/427 اختبار من الجولة السابقة) • **لم يُنفَّذ:** فتح المتصفح بتسجيل دخول للتأكد البصري من النافذة — يبقى على المالك.
+
+
+---
+
+## [2026-10-19 06:36:18 +03:00] — انتهاء الجلسات للمستخدم النشط: إصلاح الجذر + تجديد صامت (AI Model: Qoder Agent)
+
+### الخادم `alx_api` — المرحلة 1 (جلسة منزلقة بالنشاط + أكواد مميزة + حذف فوري)
+- [alx_api/src/modules/auth/auth.contracts.ts](alx_api/src/modules/auth/auth.contracts.ts): واجهة `AuthSessionRenewalDto { sessionExpiresAt, idleSeconds }` + طريقة المنفذ `renewSession({ userId, sessionId, device? })` على `AuthUseCases`.
+- [alx_api/src/modules/auth/auth.use-cases.ts](alx_api/src/modules/auth/auth.use-cases.ts): `SessionValidityRecord` ومنفذ `findSessionValidity`/`touchSession`/`endSessionById`؛ خطأّن جديدان `SESSION_EXPIRED` (`AUTH_SESSION_EXPIRED`) و`ACCOUNT_DISABLED` (`AUTH_ACCOUNT_DISABLED`)؛ `authenticateAccessToken` أعيدت — فشل تحقّق JWT يبقى `AUTH_INVALID_CREDENTIALS` (يعني «أعِد السكّ»)، صف مفقود/منتهٍ → `SESSION_EXPIRED` مع `endSessionById('expired')`، حساب معطّل → `endSessionById('disabled')` + `ACCOUNT_DISABLED`؛ `renewSession` يمدّد النافذة من `idleWindowMs()` ويعيد موعد الخادم + `idleSeconds`؛ تفرّعات `refresh` المنتهية تُنظّف ثم ترمي القاطع (مع إبقاء `AUTH_INVALID_CREDENTIALS` لمسارات إعادة الاستخدام/التسابق عمدًا).
+- [alx_api/src/modules/auth/drizzle-auth.repository.ts](alx_api/src/modules/auth/drizzle-auth.repository.ts): `findSessionValidity` (بلا مرشّح زمني في SQL — الحالة يفرّقها الاستخدام)، `touchSession` (UPDATE بشرط `revoked_at IS NULL AND expires_at > used_at`)، `endSessionById` (معامل `SELECT … FOR UPDATE` ثم حذف الصفوف وتسجيل `auth.session.ended.<reason>`).
+- [alx_api/src/modules/auth/auth.routes.ts](alx_api/src/modules/auth/auth.routes.ts): `sessionLimiter` منفصل (لا يعاقر نبضات التمديد حدّ الدخول 10/دقيقة) و`POST /api/v1/auth/session/renew` خلف `authenticate` يعيد `renewSession`.
+- [alx_api/src/server.ts](alx_api/src/server.ts): كنّاس الجلسات من `5 * 60_000` إلى `60_000` (دقيقة لا خمس) بتعليق مزدوج اللغة.
+- **اختبارات:** ملف جديد [alx_api/tests/unit/auth/auth.session-sliding.test.ts](alx_api/tests/unit/auth/auth.session-sliding.test.ts) (9 حالات بمفاتيح Ed25519 حقيقية)؛ تحديث مثبّت [auth.use-cases.test.ts](alx_api/tests/unit/auth/auth.use-cases.test.ts)؛ إدخال `renewSession: jest.fn()` في 19 ملف اختبار كانت تفشل بالمواصفة.
+
+### عميل الموظف — المرحلتان 2 و3 (جدولة من ساعة الخادم + إنهاء قاطع واحد)
+- [src/lib/alxApiClient.ts](src/lib/alxApiClient.ts): `setSessionExpiresAt(iso)` يخزّن موعد الخادم بعد تمديد صامت دون لمس الرموز.
+- [src/data/http/session-refresh.ts](src/data/http/session-refresh.ts): لم يعد `clearTokens()` عند أي 401 — يقرأ رمز الخطأ؛ القاطع فقط (`AUTH_SESSION_EXPIRED`/`AUTH_ACCOUNT_DISABLED`/`AUTH_INVALID_CREDENTIALS`) يُنهي؛ قفل بين التبويبات عبر `navigator.locks` (`swiftship:auth-refresh`) يمنع دوران مزدوج لرمز التجديد ويُعيد استخدام نتيجة التبويب الفائز.
+- [src/data/http/session-keepalive.ts](src/data/http/session-keepalive.ts): أُعيد بناؤه على ساعتين مستقلّتين — إعادة سكّ الرمز قبل انتهائه بـ`TOKEN_RENEW_LEAD_MS` (يمدّد النافذة خادميًا أيضًا)، ونبضة `POST /session/renew` قبل نهاية الخمول بـ`IDLE_RENEW_LEAD_MS`؛ الجدولة من `getSessionExpiresAt()` مع سقف فحص 30 ث؛ يرفض التمديد إن `lastActivityAt <= lastRenewalAt`؛ التبويب المخفي/غير المتصل يُؤجَّل بهدوء.
+- [src/data/http/session-events.ts](src/data/http/session-events.ts): حدث `SESSION_TERMINATED_EVENT` + `announceSessionTermination()` (يميّز الإنهاء القاطع الصادر من طبقة البيانات عن بثّ الحالة الذي يُصدره المزوّد بنفسه).
+- [src/data/http/polling-channel.ts](src/data/http/polling-channel.ts): `stopAllPollingChannels()` تُوقف كل مؤقّتات الجلب عند انتهاء الجلسة.
+- [src/features/auth/AuthSessionProvider.tsx](src/features/auth/AuthSessionProvider.tsx): مستمع `SESSION_TERMINATED_EVENT` → `stopAllPollingChannels()` + `setState({status:'expired'})`؛ فالموجِّه في [src/App.tsx:99](src/App.tsx) و[:101](src/App.tsx) يحوِّل إلى `/login` لأن `user` صارت null — بلا تحديث صفحة.
+
+### بوابة العميل `alx_web` — المرحلة 4 (تجديد دائم، لا إنهاء للعميل بالخمول)
+- [alx_web/src/api/portalAuthGateway.ts](alx_web/src/api/portalAuthGateway.ts): مفتاح `alx_portal_api_session_expires_at` يُخزَّن في `writeTokens` ويُمسح في `clearTokens`؛ `refresh()` صار يحتمل العارض (يعيد false دون محو) ويمحو فقط عند `PORTAL_AUTH_INVALID_CREDENTIALS`؛ طريقتان عامّتان `renewSession()` و`getSessionExpiresAt()` أُضيفتا للمواصفة `PortalAuthGateway`.
+- [alx_web/src/context/PortalAuthContext.tsx](alx_web/src/context/PortalAuthContext.tsx): مؤقّت تجديد مستقل عن النشاط (مجدوَل من `getSessionExpiresAt()` ناقصًا دقيقة، مع `visibilitychange`/`online` وإعادة محاولة بعد عارض 15 ث) — لا يُنهي جلسة العميل عند انتهاء المهلة، بل يمدّدها بصمت.
+
+### التحقق
+- `alx_api`: `tsc --noEmit` نظيف • `jest --runInBand` 50 مجموعة/436 اختبارًا • الموظف: `tsc --noEmit` نظيف • `vitest` 96 ملفًا/428 اختبارًا (5 متخطاة) • `alx_web`: `tsc -b` نظيف • `vitest` 4/17 • **لم يُنفَّذ:** تحقّق بصري في المتصفح بتسجيل دخول (يتطلب جلسة المالك المعتمدة).
+
+## [2026-10-19 09:20 +03:00] — AI Model: Qoder Agent — نقل «طلبات سداد البوابة» إلى القيود والسندات + تسوية القيد المرتبط
+- السياق: ضمن طلب المالك (الجزء الرابع) «نقل تبويبة طلبات سداد البوابة من قسم المحاسبة الى قسم القيود والسندات» — لأنها الآن عمليات قيود (draft/post/void) وليست محاسبة عامة.
+- src/components/financeAccounting/FinanceAccountingTabNavigation.tsx: حذف زر التبويبة (وكانت بعد «دفتر الأستاذ» بأيقونة ClipboardList) من قائمة قسم المحاسبة، وإزالة استيراد ReceiptText غير المستخدم.
+- src/components/FinanceAccounting.tsx: حذف استيراد PortalPaymentReviewTab وحذف كتلة العرض الشرطية `accountingTab === 'portal_payment_review'`.
+- src/components/financeAccounting/FinanceAccountingTypes.ts: إزالة `| 'portal_payment_review'` من اتحاد AccountingTab (المصدر الوحيد للنوع).
+- src/features/financeEntries/pages/FinanceEntriesPage.tsx: إضافة التبويبة إلى قائمة «القيود والسندات» بعد «سندات الصرف» مباشرةً بأيقونة ReceiptText (سندات) وصلاحية `can(isAdmin, hasPermission, 'view_portal_payment_requests', 'view_finance')`، ولوحة عرض `<PortalPaymentReviewTab isAr canReview={isAdmin || hasPermission('view_finance')} />` بعد لوحة سندات الصرف.
+- src/components/finance/PortalPaymentReviewTab.tsx (تحديث التسوية حول القيد المُنشأ تلقائيًا):
+  - PaymentReviewItem أصبح يتضمن financeEntryId?: string — القيد غير المرحّل المُنشأ تلقائيًا مع كل طلب سداد (main_entry posting_status='draft' + أطرافه في account_trans).
+  - settle(): تُقرأ `item.financeEntryId` أولًا (أو من الذاكرة المحلية financeEntryIds للطلبات القديمة)؛ إن غاب المعرّف يظهر تنبيه «هذا الطلب غير مرتبط بقيد مالي — أدخل معرف القيد المرحّل قبل التسوية» ويُلغى الإجراء؛ إن وُجد يُرحَّل القيد عبر POST post ثم تُحدَّث حالة الطلب إلى Paid.
+  - بطاقة الطلب: إن وُجد قيد مرتبط يُعرض بالذهبي «القيد المرتبط (غير مرحّل): {financeEntryId}» ولا يُعرض حقل الإدخال اليدوي إلا للصفوف القديمة غير المرتبطة (placeholder «للطلبات القديمة فقط: معرف القيد المرحّل…»)؛ الشبكة md:grid-cols-[1fr_auto_auto].
+  - العنوان الفرعي للتبويبة: «كل طلب يُنشئ قيداً غير مرحّل في القيود — الاعتماد يُرحّله، والرفض يلغيه.»
+- التحقق: `npx tsc --noEmit -p tsconfig.json` من جذر المستودع — صفر أخطاء. (تجميعات alx_api: jest 50/50 حزمة، 437/437 اختبار؛ alx_web: check+build+vitest 17/17+audit:portal-boundary نظيفة — موثّقة في ملفات alx_api و alx_web.)
+- لا DDL ولا اتصال قاعدة بيانات (المحلي 5432 مرفوض؛ يُمنع Supabase) ولا git commit.
+
+---
+
+## 2026-10-19 21:32 — الجولة F: جلسات البوابة، حذف العميل، إضافة المندوب (Qoder Agent)
+
+### 1) البوابة لا تُنهي جلسة العميل (alx_api)
+- `alx_api/src/modules/portal/portal-auth.service.ts`: حُذف خيار `sessionIdleWindowMs` ودالة `idleWindowMs()`، وأُضيفت `sessionLifetimeMs()` = `max(refreshTokenTtlSeconds*1000، 30 دقيقة)`. `issueSession()` و`refresh()` تستعملانها، فتمتد الجلسة مع كل تجديد بدل نافذة خمول الموظفين. معلومة ثابتة جديدة `MINIMUM_SESSION_LIFETIME_MS`.
+- `alx_api/src/server.ts`: أُزيل `sessionIdleWindowMs: createSessionIdleWindow(database.pool)` من توصيل `PortalAuthService` واستُبدل بتعليق عربي/إنجليزي، وسقط استيراد `session-policy` (الموظف ما زال يقرأه عبر `auth.factory.ts`).
+- `alx_api/tests/portal-auth.service.test.ts`: اختبار جديد «يعطي العميل أمد رمز التجديد لا مهلة خمول الموظفين» يتحقق من `sessionExpiresAt` عند الدخول وبعد `refresh` ومن `touchSession`.
+
+### 2) عميل البوابة يجدّد قبل أول 401 (alx_web)
+- `alx_web/src/api/portalAuthGateway.ts`: مفتاح جديد `alx_portal_api_access_token_expires_at` يُكتب من `expiresInSeconds`، و`sessionExpiresAt` يُخزَّن كطابع زمني، و`clearTokens` يمسح الاثنين. استُبدلت `getSessionExpiresAt()` بـ`getNextRenewalAt()` (أقرب موعد بين رمز الوصول والجلسة) في الواجهة والـ interface.
+- `alx_web/src/context/PortalAuthContext.tsx`: `scheduleFromServer()` صارت `scheduleNextRenewal()` وتُؤرِّخ على `getNextRenewalAt()` بلا سقف 120 ثانية (الموعد نفسه صار المحرِّك)، وتبقى إعادة الفحص الهادئة للتبويب المخفي/انقطاع الشبكة.
+
+### 3) حذف العميل نهائي عبر مسار مشترك (alx_api)
+- ملف جديد `alx_api/src/core/db/purge-entity.ts`: `purgableEntities` (+`customers`)، `unlinkEntityAccount`، `purgeEntityRecord` — منقولة حرفيًا من `operations.repository.ts` مع الحراسة الإضافية `PURGE_GUARDS` (رفض حذف عميل له صف في `portal_users` لأن القيد `SET NULL` كان سيُيتّم حساب الموقع).
+- `alx_api/src/modules/operations/operations.repository.ts`: حُذفت النسخة المحلية (الكتلة 33–142) واستُعيض عنها بـ`import { purgeEntityRecord }`؛ بقية الاستخدامات (`deleteCourier`/`deleteEmployee`/`deleteSource`/`deleteShippingCompany`) كما هي.
+- `alx_api/src/modules/customers/customers.contracts.ts` + `customers.repository.ts`: `archive()` (أرشفة `is_active=false`) استُبدلت بـ`delete()` تنادي `purgeEntityRecord(pool, 'customers', …)`.
+- `alx_api/src/modules/customers/customers.routes.ts`: `DELETE /api/v1/customers/:customerId` يعيد `{ deleted: true, customerId }` و404 عند غياب الصف.
+- `alx_api/src/core/http/database-error.ts`: رسالة جديدة `PURGE_BLOCKED_CUSTOMER_HAS_PORTAL_ACCOUNT`.
+- الاختبارات: `tests/customers.test.ts` (صارت `delete` مع حالتَي نجاح و404) و`tests/security.test.ts` (mock محدَّث).
+
+### 4) إضافة المندوب تترك التوليد للخادم (src)
+- `src/features/couriers/pages/CouriersPage.tsx`: لم تعد `handleAddSubmit` تولّد `accountCode/accountId` ولا ترسل `courierId`/`accountId`؛ تأخذ المعرّف والحساب من صفّ المندوب العائد (`courier.id`, `courier.accountId`)، وحُذف `financialAccountService.createAccountForEntity` المكرر وعلامة `financialAccountCreated`؛ سجل النشاط والإشعار يستندان إلى نتيجة الخادم.
+
+### التحقق
+- `alx_api`: `tsc --noEmit` نظيف، `jest --runInBand` = 50 مجموعة / 441 اختبار ناجحة.
+- الموظف: `tsc --noEmit` نظيف، `vitest run` = 96 ملف / 428 اختبار (5 متخطاة كما السابق).
+- البوابة: `tsc -b` نظيف، `vitest run` = 4 ملفات / 17 اختبار.
+- لا تغيير في بنية القاعدة ولا كتابة بيانات؛ يلزم إعادة تشغيل الـAPI وتسجيل دخول واحد أخير في الموقع.
+
+## 2026-10-19 23:46 — الجولة G: قفل التجديد في الموقع + عبارة تدوير واحدة في الخادم
+- `alx_web/src/api/portalAuthGateway.ts`: ثوابت جديدة `ACCESS_RENEWAL_LEAD_MS=60000`، `REFRESH_LOCK_NAME='alx-portal:refresh'`، `REFRESH_PATH`، والحدث المُصدَّر `PORTAL_SESSION_TERMINATED_EVENT='alx-portal:session-terminated'`؛ دوال `endPortalSession()` و`needsProactiveRenewal()`؛ حقل صفي `refreshing` يُحوّل `refresh()` إلى عملية واحدة يشترك فيها كل النداءات المتوازية، مع `refreshUnderLock()` (قفل `navigator.locks` بين التبويبات، ومن سبقه أثناء الانتظار ينجح بلا دوران ثانٍ) و`rotateRefreshToken()` و`endIfRejectionIsOurs()`؛ `request()` يجدّد استباقيًا قبل الإرسال؛ `authenticatedRequest()` يفشل محليًا بلا رموز ويرمي `PORTAL_AUTH_TEMPORARY_FAILURE` عند العارض فلا يمسح جلسة نشطة.
+- `alx_web/src/context/PortalAuthContext.tsx`: استيراد الحدث + effect يستمع إليه فيصفّر `user` و`customerDetails` ويحذف `alx_portal_user_profile`، فيتوقف الجلب غير الموثّق بعد النهاية القاطعة.
+- `alx_api/src/modules/portal/portal-auth.repository.ts`: `rotateRefreshToken` عبارة CTE واحدة (`consumed`→`issued`→`linked`→`renewed`) تمدّد `portal_sessions.expires_at` و`last_used_at` وأعمدة الجهاز في نفس الرحلة، وتُعيد `false` حين لا صف مُستهلك؛ حُذفت `touchSession`.
+- `alx_api/src/modules/portal/portal-auth.contracts.ts`: توقيع `rotateRefreshToken` أضيف له `sessionExpiresAt` و`device`؛ أُزيلت `touchSession`.
+- `alx_api/src/modules/portal/portal-auth.service.ts`: `refresh()` يحسب `sessionExpiresAt` قبل التدوير وتمرّيره في نداء واحد؛ لا `touchSession` بعد الآن.
+- `alx_api/tests/portal-auth.repository.test.ts`: اختباران جديدان — عبارة تدوير واحدة بلا `pool.connect` وتشمل تمديد الجلسة، و`false` عند رمز مُستهلَك.
+- `alx_api/tests/portal-auth.service.test.ts`: تُحذيف `touchSession` من المحاكاة والتوقّع صار على `rotateRefreshToken({ sessionExpiresAt })`.
+- `alx_web/src/api/portalAuthGateway.test.ts`: خمسة اختبارات جديدة لسلوك الجلسة (اشتراك المتوازي في تجديد واحد، تجديد استباقي، محو+إعلان قاطع، بقاء الجلسة عند 504، رفض محلي بلا رموز) وتهيئة نافذة الاختبار لصار `dispatchEvent` مسجَّلًا.
+- النتائج: `alx_api` tsc نظيف و443 اختبارًا ناجحًا؛ `alx_web` `tsc -b` نظيف و22 اختبارًا ناجحًا؛ لم تتغير اختبارات واجهة الموظفين (لا تعديل فيها هذه الجولة).
+
+---
+
+## [2026-10-20 00:32:00 +03:00] — AI Model: Gemini 3.8 Flash (Antigravity Agent)
+### التحقق الشامل من ترحيلات قاعدة البيانات وخاصة من بعد 42
+- **الهدف:** التأكد من تطبيق كافة ملفات ترحيل قاعدة البيانات المعتمدة في `alx_api/src/db/migrations` وبالأخص الترحيلات من 42 فما فوق، وخلو قاعدة البيانات من أي أخطاء هيكلية أو أخطاء صلاحيات.
+- **تفاصيل المطابقة الميدانية:**
+  1. تم فحص الترحيلات في Supabase ومقارنتها بقائمة ملفات `alx_api/src/db/migrations`:
+     - 45 ملف ترحيل من `0002_auth_private_storage.sql` حتى `0047_portal_session_device_facts_and_delete.sql`، جميعها مطبقة ومسجلة في `supabase_migrations.schema_migrations`.
+  2. تدقيق الترحيلات المحددة من بعد 42:
+     - **0042 (`0042_drop_duplicate_and_orphan_tables.sql`)**: دمج العملات المخصصة وأسعارها في `public.currency` و`public.cur_price`، ونقل إعدادات لوحة التحكم لـ `user_settings`، وإسقاط الجداول المكررة واليتيمة العشرة بنجاح (`settings_custom_currency`, `settings_report_account`, `settings_dashboard`, `settings_dashboard_metric`, `report_template_filter`, `report_exchange_rate`, `report_settings`, `public_tracking_product`, `public_tracking_event`, `settings`).
+     - **0043 (`0043_replace_migration_maps_with_real_columns.sql`)**: إضافة أعمدة `superseded_by_account_id` و`superseded_at` إلى جدول `accounts`، وإسقاط دوال البناء وجداول الخرائط الأربعة (`account_id_migration_map`, `financial_legacy_migration_map`, `financial_migration_exceptions`, `portal_user_migration_map`).
+     - **0044 (`0044_fix_entity_account_provisioning.sql`)**: إعادة بناء دالة `ensure_entity_financial_account` بالأعمدة المسطحة وتصحيح ترتيب المعطيات ومنع خطأ `column data does not exist`.
+     - **0045 (`0045_allow_runtime_session_delete.sql`)**: منح صلاحية `DELETE` لدور `alx_api_runtime` على `alx_api_private.api_sessions` وتثبيت سياسة RLS المقابلة `api_runtime_sessions_delete` لتمكين إنهاء الجلسات بأمان.
+     - **0046 (`0046_fix_purge_delete_order.sql`)**: تعديل دالة `purge_entity_financial_footprint` لتطبيق ترتيب الحذف الصحيح ومنع أخطاء المفاتيح الأجنبية مع حارس عهدة المندوب المفتوحة.
+     - **0047 (`0047_portal_session_device_facts_and_delete.sql`)**: إضافة أعمدة الجهاز (`device_name`, `user_agent`, `ip_address`) إلى `alx_api_private.portal_sessions` وتأمين صلاحية وسياسة الحذف `portal_runtime_sessions_delete`.
+  3. فحص الأخطاء وسجلات النظام:
+     - تم فحص الفهارس: لا يوجد أي فهرس معطوب (`indisvalid`).
+     - تم فحص القيود: لا توجد قيود غير مفحوصة أو معطوبة على مستوى جداول النظام.
+     - تم فحص `postgres_logs` و`postgrest_logs`: صفر أخطاء تشغيلية حديثة.
+
+---
+
+## [2026-10-20 00:52:00 +03:00] — AI Model: Gemini 3.8 Flash (Antigravity Agent)
+### حل مشكلة فشل حذف العميل ورسالة "بنية قاعدة البيانات غير محدَّثة"
+- **الملف المعدل:** `alx_api/src/core/db/purge-entity.ts`
+- **تفاصيل التغيير:**
+  - في الكائن `PURGE_GUARDS` الخاص بالعملاء، تم تعديل جملة الاستعلام:
+    ```typescript
+    // سابقاً:
+    sql: `SELECT 1 FROM public.portal_users WHERE customer_id = $1 LIMIT 1`
+    // بعد التصحيح:
+    sql: `SELECT 1 FROM public.portal_users WHERE linked_customer_id = $1 LIMIT 1`
+    ```
+  - **السبب والربط التقني:** 
+    جدول `public.portal_users` يحتوي على عمود المفتاح الأجنبي `linked_customer_id` الذي يشير إلى `public.customers(customer_id)`. عندما تم استدعاء `customer_id` بدلاً منه، رمى محرك Postgres الخطأ `42703 (undefined_column)`. قام `database-error.ts` بتحويل أي خطأ 42703 إلى رسالة "بنية قاعدة البيانات غير محدَّثة؛ طُبِّق الترحيلات المعلّقة (0044 وما بعدها)." ظناً أن هناك عموداً لم يُرحل في القاعدة، بينما كانت قاعدة البيانات مكتملة والخطأ في اسم العمود بالاستعلام البرمجي.
+- **النتائج:**
+  - تم إجراء فحص الأنواع عبر `npx tsc --noEmit` بنجاح (خالٍ من الأخطاء).
+  - تم تشغيل اختبارات Jest: 50 مجموعة اختبار / 443 اختباراً ناجحاً بنسبة 100%.
+
+
+## [2026-10-20 01:44:57 +03:00] — إعداد خطة المسابقات والجوائز والكوبونات — AI: Manus (الاسم الداخلي للنموذج غير متاح في بيانات الجلسة)
+- **النطاق:** تدقيق محلي للقراءة فقط في جذر `SWIFTSHIP_SYSTEM` ومجلدي `alx_web` و`alx_api`، ثم إنشاء `خطة_تنفيذ_المسابقات_والجوائز_والكوبونات.md` في جذر المشروع الأصلي.
+- **النتائج المثبتة:** النظام الأساسي يملك توجيهًا وتنقلًا مستقلين عن إدارة الموقع الحالية؛ بوابة العميل تملك الرابط `/portal/customer/gifts` لكن `GiftsPage.tsx` يوضح أنه scaffold بلا بيانات/وظائف؛ ووحدة `alx_api` الحالية تشمل `portal` و`site-content` ولا تحتوي وحدة أعمال للمسابقات/الجوائز/الكوبونات وفق المسارات التي تمت مراجعتها.
+- **توافق الكوبونات:** `0030_flatten_orders.sql` يعرّف `coupon_rate`, `coupon_value`, `coupon_enabled` كحقول في الطلب. مخطط `portalOrderCreateSchema` يسمح حاليًا بـ `couponEnabled/couponRate`، والخدمة تمرر الرقم إلى محرك التسعير الخادمي مع سقف عند قيمة المنتجات؛ لكنه لا يتحقق من كتالوج/إصدار كوبون، ومخطط API يذكر عدم وجود جدول كوبونات. توصي الخطة بعدم الثقة بمبلغ العميل والتحقق من رمز/استحقاق خادمي عند quote والإنشاء، مع الحفاظ على عرض الطلبات التاريخية والخصم اليدوي الداخلي.
+- **محتوى الخطة:** تحديد النطاق والإقصاءات، حالات المسابقة والمشاركة والسحب والفائز والمطالبة وتسليم الجوائز والكوبونات، نموذج بيانات مرشح غير DDL، واجهات الموظف والعميل، قواعد صلاحيات مقترحة، فصل Business Logic عن UI، التكامل والاختبارات والخصوصية والمراقبة ومراحل P0–P13 وبوابات القبول.
+- **حدود التدقيق:** راجعت الملفات/الترحيلات المحلية حتى 0047 ولم أتصل بقاعدة البيانات الحية؛ لا يُعد الملف المحلي دليلًا على حالة التطبيق الحية. لم أشغّل SQL أو migrations أو اختبارات أو بناء.
+- **حماية الحالة السابقة:** كان جذر Git والوحدتان الفرعيتان في حالة تغييرات محلية سابقة عند بدء المهمة؛ لم أنظف أو أستبدل أو أعدل تلك التغييرات. لم تُعدل ملفات الكود في أي من المستودعات الفرعية.
+- **نطاق التغيير:** وثيقة تخطيط وسجلات المشروع العامة فقط. لم يحدث تغيير قاعدة بيانات؛ لذلك لم تُعدل `DBdevloping_history.md` أو `db_commends.md`. لم يُنشأ commit أو push؛ لا توجد ميزة تشغيلية منفذة.

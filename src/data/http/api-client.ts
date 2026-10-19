@@ -11,6 +11,9 @@ export interface ApiClientOptions {
   fetchImpl?: typeof fetch;
   credentials?: RequestCredentials;
   timeoutMs?: number;
+  /** مهلة القراءة المستقلة: صفحات limit=1000 تتجاوز المهلة القصيرة فتُلغى ثم تُعاد، وهذا هو انقطاع البيانات.
+   *  Independent read budget: limit=1000 pages exceed a short timeout, abort, and retry — that is the data dropout. */
+  readTimeoutMs?: number;
   requestIdFactory?: () => string;
   maxReadRetries?: number;
   accessTokenFactory?: () => string | null | undefined;
@@ -63,11 +66,17 @@ async function apiErrorFromResponse(response: Response): Promise<ApiClientError>
 export class ApiClient {
   private readonly fetchImpl: typeof fetch;
   private readonly refreshAccessToken: () => Promise<string | null>;
+  /** مهلتان منفصلتان: الكتابة يجب أن تُغلق سريعًا، والقراءة الكبيرة تحتاج سعة أكبر.
+   *  Two separate budgets: writes must fail fast, large reads need more headroom. */
+  private readonly writeTimeoutMs: number;
+  private readonly readTimeoutMs: number;
 
   constructor(private readonly options: ApiClientOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.refreshAccessToken =
       options.refreshAccessToken ?? createAccessTokenRefresher(options.baseUrl);
+    this.writeTimeoutMs = options.timeoutMs ?? 10_000;
+    this.readTimeoutMs = options.readTimeoutMs ?? Math.max(this.writeTimeoutMs, 30_000);
   }
 
   async get<T>(path: string, query?: GatewayQuery): Promise<T> {
@@ -120,7 +129,10 @@ export class ApiClient {
 
   private async send(url: URL, spec: RequestSpec): Promise<Response> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 10000);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      spec.method === "GET" ? this.readTimeoutMs : this.writeTimeoutMs,
+    );
     const accessToken = this.options.accessTokenFactory?.();
     try {
       return await this.fetchImpl(url, {
