@@ -3810,3 +3810,21 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - **ملاحظة أمنية حرجة:** جداول `public.portal_users`, `public.customers`, `public.orders`, `public.notifications` ظهرت دون RLS مع منح مباشرة واسعة لـ `anon` و`authenticated`; لم يتم إصلاحها تلقائيًا لأن الإصلاح خارج نطاق P2 القراءة فقط ويحتاج مراجعة مستقلة.
 - **النطاق:** لم يتغير كود التطبيق، ولم ينفذ DDL أو DML أو migration.
 - **النتيجة:** P2/P3 موثقتان؛ P4 متوقف حتى إغلاق المانع الأمني واعتماد التصميم الفيزيائي.
+
+## [2026-10-20 04:37 (+03:00)] — تنفيذ P4-P5 — Manus
+- أضيف مخطط Drizzle مستقل لكيانات features-management وربط داخل `src/db/schema.ts`.
+- أضيفت migrations `0048_features_management_foundation.sql` و`0049_features_draws_and_awards.sql`، وتم تطبيقهما مباشرة على Supabase.
+- أضيفت وحدة `features-management` الأساسية مع Zod schemas، contracts، service، repository، routes، factory، pagination وpermission guards.
+- تم تسجيل الوحدة في `app.ts` و`server.ts` دون اتصال مباشر من controller بقاعدة البيانات.
+- أضيفت صلاحيات contests/prizes/coupons وأسندت إلى admin.
+- أضيفت وثائق `docs/featuresManagement/P4-P5-implementation.md` و`alx_api/docs/table-registry.md`.
+- التحقق: `npm run check` ناجح، و51 suite / 453 test ناجحة.
+- **تغيير قاعدة البيانات:** نعم، تم تطبيق DDL وRBAC مباشرة. تم تجاوز RLS وdry-run بتفويض صريح وسجل ذلك كدين أمني قبل الإطلاق العام.
+
+## [2026-10-20 04:51 (+03:00)] — استكمال تحديث OpenAPI والعقود الرسمية — Manus
+- تم تحديث `alx_api/docs/openapi.yaml` بإضافة ست عمليات رسمية: list/create للمسابقات والجوائز وقواعد الكوبونات.
+- تم توثيق BearerAuth، الصلاحيات المطلوبة، pagination، validation responses، status codes 201، وstandard envelopes.
+- تمت إضافة schemas لـ`FeatureContest` و`FeaturePrize` و`FeatureCouponRule` ومدخلات الإنشاء وpagination metadata.
+- تم توسيع عقود TypeScript typed DTOs والحالات وpermission codes وdomain error codes.
+- التحقق: Prettier نجح، parsing OpenAPI عبر Prettier نجح، وجميع مراجع الـschemas وعددها 48 موجودة، و`npm run check` و453 اختبارًا ناجحة.
+- لا يوجد تغيير في قاعدة البيانات.

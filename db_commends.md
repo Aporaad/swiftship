@@ -6078,3 +6078,16 @@ SELECT portal_user_id, linked_customer_id FROM public.portal_users LIMIT 5;
 
 ### استعلام فشل دون أثر
 - تم تنفيذ استعلام استكشافي جمع `public.order_status` مع عمود `is_active` غير الموجود؛ فشل برسالة PostgreSQL `42703` قبل إرجاع النتيجة، ولم يجرِ أي كتابة. تم تصحيحه باستعلامي metadata وحالات الطلب أعلاه.
+
+## [2026-10-20 04:37 (+03:00)] — SQL/DDL تنفيذ P4-P5 — Manus
+- **المشروع:** Supabase `ejrojwbbflzchasvgexr`.
+- **أوامر migration المنفذة:**
+  1. `apply_migration(project_id='ejrojwbbflzchasvgexr', name='features_management_foundation_0048')` باستخدام النص الكامل المحفوظ في `alx_api/src/db/migrations/0048_features_management_foundation.sql`؛ أنشأ جداول `feature_contests`, `feature_prizes`, `feature_contest_prizes`, `feature_contest_entries`, `feature_coupon_rules`, `feature_coupon_issuances`, `feature_coupon_redemptions`, `feature_audit_events`، وأضاف صلاحيات `features.*` وإسنادها لـ`admin`.
+  2. `apply_migration(project_id='ejrojwbbflzchasvgexr', name='features_draws_and_awards_0049')` باستخدام النص الكامل المحفوظ في `alx_api/src/db/migrations/0049_features_draws_and_awards.sql`؛ أنشأ `feature_draw_runs` و`feature_winner_awards` وفهارسها وقيودها.
+- **استعلامات تحقق SELECT المنفذة:**
+  - `SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('feature_contests','feature_prizes','feature_contest_prizes','feature_contest_entries','feature_draw_runs','feature_winner_awards','feature_coupon_rules','feature_coupon_issuances','feature_coupon_redemptions','feature_audit_events') ORDER BY table_name LIMIT 20;`
+  - `SELECT code, resource, action FROM alx_api_private.permissions WHERE code LIKE 'features.%' ORDER BY code LIMIT 50;`
+  - `SELECT r.code AS role_code, p.code AS permission_code FROM alx_api_private.roles r JOIN alx_api_private.role_permissions rp ON rp.role_id=r.role_id JOIN alx_api_private.permissions p ON p.permission_id=rp.permission_id WHERE r.code='admin' AND p.code LIKE 'features.%' ORDER BY p.code LIMIT 20;`
+  - `SELECT n.nspname AS schema_name, c.relname AS table_name, c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS rls_forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname LIKE 'feature_%' ORDER BY c.relname LIMIT 100;`
+- **نتيجة التحقق:** الجداول العشرة موجودة، الصلاحيات الست موجودة ومسندة إلى admin، وRLS للجداول الجديدة `false` طبقًا للتفويض.
+- **لم ينفذ dry-run:** تم التطبيق المباشر بناءً على أمر المالك، وهو انحراف موثق عن بوابة P4.

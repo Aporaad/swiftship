@@ -2885,3 +2885,20 @@
 - [x] إعداد واعتماد عقود API وDTOs وتدفقات state وواجهات المستخدم في `docs/featuresManagement/P3-scope-api-ui-contracts.md`.
 - [x] قفل انتقال عقد البوابة من `couponRate` إلى `couponCode` دون المساس بكوبون الشركة الداخلي.
 - [ ] المرحلة التالية P4 متوقفة حتى معالجة مانع RLS/GRANTs واعتماد تصميم DDL والمراجعة الأمنية.
+
+## [2026-10-20 04:37 (+03:00)] — تنفيذ P4-P5
+- [x] إنشاء مخطط Drizzle في `alx_api/src/db/features-schema.ts` وربطه بـ`src/db/schema.ts`.
+- [x] إنشاء migration `0048_features_management_foundation.sql` وتطبيقه مباشرة على Supabase.
+- [x] إنشاء migration `0049_features_draws_and_awards.sql` وتطبيقه مباشرة لإكمال `feature_draw_runs` و`feature_winner_awards`.
+- [x] إنشاء أساس وحدة `alx_api/src/modules/features-management` وفصل routes/service/repository/contracts/schemas.
+- [x] ربط الوحدة في `app.ts` و`server.ts` وإضافة صلاحيات `features.*` لدور `admin`.
+- [x] إضافة اختبار schemas ونجاح `npm run check` و51 suite/453 اختبارًا.
+- [x] التحقق الحي من وجود 10 جداول و6 صلاحيات وإسنادها إلى `admin`.
+- **انحراف معتمد:** تم تجاوز RLS وdry-run والتطبيق المباشر بناءً على موافقة المالك؛ الجداول الجديدة دون RLS حاليًا.
+
+## [2026-10-20 04:51 (+03:00)] — استكمال OpenAPI والعقود الرسمية
+- [x] إضافة مسارات OpenAPI الرسمية لـ`/api/v1/features/contests` و`/prizes` و`/coupons` للقراءة والإنشاء.
+- [x] إضافة request schemas وresponse envelopes وDTO schemas المطابقة لـZod وواجهات الـroutes.
+- [x] توسيع `features-management.contracts.ts` بأنواع DTOs والحالات والصلاحيات وأكواد الأخطاء.
+- [x] تشغيل Prettier والتحقق من مراجع schemas.
+- **قاعدة البيانات:** لا يوجد تغيير؛ لم يتم تسجيل إدخال في سجل تغييرات قاعدة البيانات.

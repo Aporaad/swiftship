@@ -2061,3 +2061,13 @@ COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول 
 - ثبت وجود `currency`, RBAC في `alx_api_private`, و`notification_outbox` مع RLS/unique idempotency.
 - ثبت أن جداول `public.portal_users/customers/orders/notifications` دون RLS في الفحص ومع منح مباشرة واسعة للأدوار العامة؛ سُجل ذلك كمانع أمني ولم ينفذ أي إصلاح تلقائي.
 - **نوع التغيير:** قراءة فقط؛ لا DDL/DML/migration.
+
+## [2026-10-20 04:37 (+03:00)] — تنفيذ P4-P5 — Manus
+- أضيف مخطط Drizzle مستقل لكيانات features-management وربط داخل `src/db/schema.ts`.
+- أضيفت migrations `0048_features_management_foundation.sql` و`0049_features_draws_and_awards.sql`، وتم تطبيقهما مباشرة على Supabase.
+- أضيفت وحدة `features-management` الأساسية مع Zod schemas، contracts، service، repository، routes، factory، pagination وpermission guards.
+- تم تسجيل الوحدة في `app.ts` و`server.ts` دون اتصال مباشر من controller بقاعدة البيانات.
+- أضيفت صلاحيات contests/prizes/coupons وأسندت إلى admin.
+- أضيفت وثائق `docs/featuresManagement/P4-P5-implementation.md` و`alx_api/docs/table-registry.md`.
+- التحقق: `npm run check` ناجح، و51 suite / 453 test ناجحة.
+- **تغيير قاعدة البيانات:** نعم، تم تطبيق DDL وRBAC مباشرة. تم تجاوز RLS وdry-run بتفويض صريح وسجل ذلك كدين أمني قبل الإطلاق العام.
