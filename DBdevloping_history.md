@@ -2053,3 +2053,11 @@ COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول 
   2. تم فحص أعمدة جدول `public.portal_users` عبر `information_schema.columns`، وتأكد أن عمود الربط الصحيح بالعميل هو:
      `linked_customer_id` (نوعه `text`) المرتبط بمفتاح أجنبي `portal_users_linked_customer_id_fkey` على `public.customers(customer_id)`.
   3. **الاستنتاج:** قاعدة البيانات محدثة بالكامل وسليمة 100% ولا ينقصها أي ترحيل؛ السبب كان خطأ في اسم العمود بالاستعلام المصدر من طبقة الكود في الـ API، وتم تصحيحه في الشيفرة دون الحاجة لأي تعديل على هيكل قاعدة البيانات.
+
+## [2026-10-20 04:12 (+03:00)] — نتيجة تدقيق P2 القراءة فقط
+- تم فحص مشروع Supabase `ejrojwbbflzchasvgexr` وحالته `ACTIVE_HEALTHY` ومحرك PostgreSQL 17.6.1.155.
+- سجل الترحيلات الحي يصل إلى `20261018202521_portal_session_device_facts_and_delete_0047`، مع ترحيلات حية إضافية/اختبارية؛ لا يطابق أسماء الملفات المحلية حرفيًا.
+- ثبتت علاقات `portal_users.linked_customer_id -> customers.customer_id` و`orders.customer_id -> customers.customer_id`، ووجود `order_status_id` وحقول `coupon_enabled/coupon_rate/coupon_value` التاريخية.
+- ثبت وجود `currency`, RBAC في `alx_api_private`, و`notification_outbox` مع RLS/unique idempotency.
+- ثبت أن جداول `public.portal_users/customers/orders/notifications` دون RLS في الفحص ومع منح مباشرة واسعة للأدوار العامة؛ سُجل ذلك كمانع أمني ولم ينفذ أي إصلاح تلقائي.
+- **نوع التغيير:** قراءة فقط؛ لا DDL/DML/migration.

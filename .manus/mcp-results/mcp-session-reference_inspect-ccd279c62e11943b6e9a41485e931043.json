@@ -1,0 +1,5 @@
+{
+  "server": "session-reference",
+  "tool": "inspect",
+  "result": "Task \"yZP63Ik2wkCdWkTIM2vMXT\" is not authorized for this runtime. Call `list` to see valid task ids."
+}
