@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowDownUp, Calendar, RotateCcw, Search, X } from 'lucide-react';
+import { DatePickerInput } from '../../../../../components/common/DatePickerInput';
 import { RETURN_CONDITION_LIST, RETURN_STATUS_LIST, RETURN_TYPE_LIST } from '../../../../../services/returnedProductService';
 import { RETURN_INPUT_CLASS_NAME } from './constants';
 
@@ -111,23 +112,25 @@ export function ReturnedProductsFilters({ inp = RETURN_INPUT_CLASS_NAME, canAdd,
           <div className="flex items-center gap-2">
             <Calendar className="w-3.5 h-3.5 text-slate-500" />
             <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'من:' : 'From:'}</span>
-            <input
-              id="returns-date-from"
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              className={inp + ' max-w-[160px]'}
-            />
+            <div className="max-w-[180px]">
+              <DatePickerInput
+                type="date"
+                value={dateFrom}
+                onChange={setDateFrom}
+                placeholder={isAr ? 'من تاريخ' : 'From date'}
+              />
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'إلى:' : 'To:'}</span>
-            <input
-              id="returns-date-to"
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              className={inp + ' max-w-[160px]'}
-            />
+            <div className="max-w-[180px]">
+              <DatePickerInput
+                type="date"
+                value={dateTo}
+                onChange={setDateTo}
+                placeholder={isAr ? 'إلى تاريخ' : 'To date'}
+              />
+            </div>
           </div>
           <span className="text-[10px] text-slate-500 font-bold ml-auto">
             {isAr

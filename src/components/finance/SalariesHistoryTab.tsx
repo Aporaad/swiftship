@@ -1,5 +1,6 @@
 import React from 'react';
 import { Coins, Eye, Printer, Receipt, Search, UserCheck } from 'lucide-react';
+import { DatePickerInput } from '../common/DatePickerInput';
 
 interface SalaryHistoryTabProps {
   isAr: boolean;
@@ -355,11 +356,11 @@ export default function SalaryHistoryTab({
                   ))}
                   {empStmtDateFilter === 'custom' && (
                     <>
-                      <input type="date" value={empStmtStartDate} onChange={e => setEmpStmtStartDate(e.target.value)}
-                        className="bg-black/50 border border-slate-850 rounded-xl py-1.5 px-3 text-xs font-bold text-slate-300 outline-none focus:border-[#d4af37]/50" />
+                      <DatePickerInput type="date" value={empStmtStartDate} onChange={setEmpStmtStartDate}
+                        placeholder="من تاريخ" />
                       <span className="text-slate-600 text-xs">—</span>
-                      <input type="date" value={empStmtEndDate} onChange={e => setEmpStmtEndDate(e.target.value)}
-                        className="bg-black/50 border border-slate-850 rounded-xl py-1.5 px-3 text-xs font-bold text-slate-300 outline-none focus:border-[#d4af37]/50" />
+                      <DatePickerInput type="date" value={empStmtEndDate} onChange={setEmpStmtEndDate}
+                        placeholder="إلى تاريخ" />
                     </>
                   )}
                   <button

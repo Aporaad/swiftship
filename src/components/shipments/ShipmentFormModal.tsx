@@ -5,6 +5,7 @@ import { notificationService } from '../../services/notificationService';
 import { activityLogService } from '../../services/activityLogService';
 import ConfirmModal from '../ConfirmModal';
 import { calculateShipmentCategoryFees, ItemCategory } from '../../services/itemCategoryService';
+import { DatePickerInput } from '../common/DatePickerInput';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -463,11 +464,10 @@ export default function ShipmentFormModal({
                   <label className="block text-[10px] font-black text-slate-400 uppercase">
                     {isAr ? 'تاريخ الشحن' : 'Shipping Date'}
                   </label>
-                  <input
+                  <DatePickerInput
                     type="date"
                     value={shipmentFormData.shippingDate}
-                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, shippingDate: e.target.value })}
-                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold"
+                    onChange={(val) => setShipmentFormData({ ...shipmentFormData, shippingDate: val })}
                   />
                 </div>
 
@@ -475,11 +475,10 @@ export default function ShipmentFormModal({
                   <label className="block text-[10px] font-black text-slate-400 uppercase">
                     {isAr ? 'المتوقع لوصولها' : 'Expected Arrival'}
                   </label>
-                  <input
+                  <DatePickerInput
                     type="date"
                     value={shipmentFormData.expectedArrival}
-                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, expectedArrival: e.target.value })}
-                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold"
+                    onChange={(val) => setShipmentFormData({ ...shipmentFormData, expectedArrival: val })}
                   />
                 </div>
               </div>

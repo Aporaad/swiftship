@@ -1,10 +1,12 @@
 # Dependencies
+.qoder/
 **/node_modules
 .pnpm-store/
 .zcode/
 .claude/
 .mimosa/
 .firebase-cleanup-backup/
+.manus/
 
 # Build outputs
 dist/

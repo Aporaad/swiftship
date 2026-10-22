@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { DatePickerInput } from './common/DatePickerInput';
 const numericValue = (value: unknown): number => {
   const parsed = typeof value === 'number' ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -764,11 +765,10 @@ return (
               {/* Effective Date */}
               <div className="text-start">
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تاريخ ووقت القيد' : 'Effective Date'}</label>
-                <input
+                <DatePickerInput
                   type="datetime-local"
                   value={editJournalData.createdAt}
-                  onChange={(e) => setEditJournalData({ ...editJournalData, createdAt: e.target.value })}
-                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono text-center"
+                  onChange={(val) => setEditJournalData({ ...editJournalData, createdAt: val })}
                 />
               </div>
 

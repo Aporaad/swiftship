@@ -1,6 +1,7 @@
 import { toDateInputValue } from '../../lib/dateUtils';
 import React from 'react';
 import { Plus, AlertCircle, Calendar, Trash2 } from 'lucide-react';
+import { DatePickerInput } from '../common/DatePickerInput';
 import type { OrderRecord, ShippingRow, UpdateFormData } from '../../features/orders/types';
 
 type StatusOption = { id: string | number; nameAr: string; nameEn: string };
@@ -369,37 +370,22 @@ export default function UpdateStatusModal({
 
                         <div>
                           <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
-                          <div className="relative">
-                            <input
-                              type="date"
-                              id={`upd-dispatch-date-${idx}`}
-                              value={sh.shippingDate || ''}
-                              onChange={(e) => {
-                                const newDate = e.target.value;
-                                let expected = sh.expectedArrival || '';
-                                if (newDate && sh.shippingDuration) {
-                                  const days = parseInt(sh.shippingDuration);
-                                  if (!isNaN(days)) {
-                                    const dateObj = new Date(newDate);
-                                    dateObj.setDate(dateObj.getDate() + days);
-                                    expected = toDateInputValue(dateObj);
-                                  }
+                          <DatePickerInput
+                            type="date"
+                            value={sh.shippingDate || ''}
+                            onChange={(newDate) => {
+                              let expected = sh.expectedArrival || '';
+                              if (newDate && sh.shippingDuration) {
+                                const days = parseInt(sh.shippingDuration);
+                                if (!isNaN(days)) {
+                                  const dateObj = new Date(newDate);
+                                  dateObj.setDate(dateObj.getDate() + days);
+                                  expected = toDateInputValue(dateObj);
                                 }
-                                updateUpdateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
-                              }}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const el = document.getElementById(`upd-dispatch-date-${idx}`);
-                                if (el) (el as HTMLInputElement).showPicker?.();
-                              }}
-                              className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-[#d4af37] transition"
-                            >
-                              <Calendar className="w-4 h-4" />
-                            </button>
-                          </div>
+                              }
+                              updateUpdateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
+                            }}
+                          />
                         </div>
 
                         <div>
@@ -432,25 +418,11 @@ export default function UpdateStatusModal({
 
                         <div>
                           <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
-                          <div className="relative">
-                            <input
-                              type="date"
-                              id={`upd-expected-date-${idx}`}
-                              value={sh.expectedArrival || ''}
-                              onChange={(e) => updateUpdateShippingRow(idx, { expectedArrival: e.target.value })}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const el = document.getElementById(`upd-expected-date-${idx}`);
-                                if (el) (el as HTMLInputElement).showPicker?.();
-                              }}
-                              className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
-                            >
-                              <Calendar className="w-4 h-4" />
-                            </button>
-                          </div>
+                          <DatePickerInput
+                            type="date"
+                            value={sh.expectedArrival || ''}
+                            onChange={(val) => updateUpdateShippingRow(idx, { expectedArrival: val })}
+                          />
                         </div>
 
                         <div className="col-span-2">
@@ -465,25 +437,11 @@ export default function UpdateStatusModal({
 
                         <div>
                           <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ التسليم الفعلي المكتمل' : 'Actual Completed Delivery Date'}</label>
-                          <div className="relative">
-                            <input
-                              type="date"
-                              id={`upd-delivery-date-${idx}`}
-                              value={sh.deliveryDate || ''}
-                              onChange={(e) => updateUpdateShippingRow(idx, { deliveryDate: e.target.value })}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const el = document.getElementById(`upd-delivery-date-${idx}`);
-                                if (el) (el as HTMLInputElement).showPicker?.();
-                              }}
-                              className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
-                            >
-                              <Calendar className="w-4 h-4" />
-                            </button>
-                          </div>
+                          <DatePickerInput
+                            type="date"
+                            value={sh.deliveryDate || ''}
+                            onChange={(val) => updateUpdateShippingRow(idx, { deliveryDate: val })}
+                          />
                         </div>
                       </div>
                     </div>

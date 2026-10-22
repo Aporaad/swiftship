@@ -8,9 +8,9 @@
  * Separates form state from UI and mutation logic.
  */
 
-import { toDateInputValue } from '../../../lib/dateUtils';
-import { useState } from 'react';
-import { ORDER_DEFAULT_VALUES } from '../constants/orders.constants';
+import { toDateInputValue } from "../../../lib/dateUtils";
+import { useState } from "react";
+import { ORDER_DEFAULT_VALUES } from "../constants/orders.constants";
 import type {
   OrderFormData,
   ShippingRow,
@@ -20,18 +20,19 @@ import type {
   CustomerFormData,
   ShippingCompanyFormData,
   SourceFormData,
-} from '../types';
-import type { Settings } from '../../../context/SettingsContext';
+} from "../types";
+import type { Settings } from "../../../context/SettingsContext";
 
-type OrderDefaultsSettings = Pick<Settings,
-  | 'defaultSheinDuration'
-  | 'defaultFactoryDuration'
-  | 'defaultAppDuration'
-  | 'defaultBankCommissionRate'
-  | 'defaultCompanyProfitRate'
-  | 'defaultPackagingFee'
-  | 'defaultDeliveryFee'
-  | 'defaultCourierCommissionRate'
+type OrderDefaultsSettings = Pick<
+  Settings,
+  | "defaultSheinDuration"
+  | "defaultFactoryDuration"
+  | "defaultAppDuration"
+  | "defaultBankCommissionRate"
+  | "defaultCompanyProfitRate"
+  | "defaultPackagingFee"
+  | "defaultDeliveryFee"
+  | "defaultCourierCommissionRate"
 >;
 
 // ─── القيم الافتراضية ───────────────────────────────────────────────────────
@@ -39,13 +40,13 @@ type OrderDefaultsSettings = Pick<Settings,
 const numberSetting = (
   settings: OrderDefaultsSettings | undefined,
   key: keyof OrderDefaultsSettings,
-  fallback: number,
+  fallback: number
 ): number => {
   const value = settings?.[key];
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     return Number.isFinite(value) ? value : fallback;
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
@@ -54,8 +55,8 @@ const numberSetting = (
 
 /** الصف الافتراضي لمنتج جديد - Default new item row */
 const defaultItemRow = (): ItemRow => ({
-  productName: '',
-  productUrl: '',
+  productName: "",
+  productUrl: "",
   quantity: 1,
   productPrice: 0,
   weight: 0,
@@ -63,7 +64,7 @@ const defaultItemRow = (): ItemRow => ({
   length: 0,
   width: 0,
   height: 0,
-  trackingNumber: '',
+  trackingNumber: "",
 });
 
 /** صف الشحن الافتراضي الجديد - Default new shipping row */
@@ -71,16 +72,16 @@ const defaultShippingRow = (): ShippingRow => ({
   id: Math.random().toString(36).substr(2, 9),
   shippingType: ORDER_DEFAULT_VALUES.shippingType,
   shippingCompany: ORDER_DEFAULT_VALUES.shippingCompany,
-  shippingSource: '',
-  shippingDestination: '',
-  shippingDate: '',
-  shippingDuration: '',
-  expectedArrival: '',
-  deliveryDate: '',
+  shippingSource: "",
+  shippingDestination: "",
+  shippingDate: "",
+  shippingDuration: "",
+  expectedArrival: "",
+  deliveryDate: "",
   shippingCost: 0,
   packagingFees: 0,
-  contentCategoryId: '',
-  contentCategoryName: '',
+  contentCategoryId: "",
+  contentCategoryName: "",
   cartonCount: 0,
   customsFee: 0,
   taxFee: 0,
@@ -90,27 +91,30 @@ const defaultShippingRow = (): ShippingRow => ({
 });
 
 /** بيانات نموذج الطلب الافتراضية - Default order form data */
-const defaultOrderFormData = (orderCurrency: string, currency: string): OrderFormData => ({
-  customerId: '',
-  customerName: '',
-  customerPhone: '',
-  customerAddress: '',
-  orderPartyId: '',
-  orderPartyType: 'customer',
+const defaultOrderFormData = (
+  orderCurrency: string,
+  currency: string
+): OrderFormData => ({
+  customerId: "",
+  customerName: "",
+  customerPhone: "",
+  customerAddress: "",
+  orderPartyId: "",
+  orderPartyType: "customer",
   isStaffOrder: false,
-  employeeId: '',
-  courierId: '',
-  orderPartyAccountId: '',
-  orderSourceId: '',
-  orderSourceName: '',
+  employeeId: "",
+  courierId: "",
+  orderPartyAccountId: "",
+  orderSourceId: "",
+  orderSourceName: "",
   orderSourceType: ORDER_DEFAULT_VALUES.sourceType,
-  externalOrderNumber: '',
-  trackingNumber: '',
+  externalOrderNumber: "",
+  trackingNumber: "",
   addShippingEnabled: false,
   shippingCompany: ORDER_DEFAULT_VALUES.shippingCompany,
-  shippingCourierId: '',
+  shippingCourierId: "",
   shippingCourierFeeRate: 30,
-  deliveryCourierId: '',
+  deliveryCourierId: "",
   deliveryCourierFee: 4000,
   deliveryCourierFeeCurrency: currency || ORDER_DEFAULT_VALUES.paymentCurrency,
   orderCurrency,
@@ -124,9 +128,12 @@ const defaultOrderFormData = (orderCurrency: string, currency: string): OrderFor
   sheinRedPrice: 0,
   amountPaid: 0,
   paymentMethod: ORDER_DEFAULT_VALUES.paymentMethod,
-  notes: '',
+  notes: "",
   deductSourcingCostFromCourier: false,
-  sourcing_cost: 'system',
+  sourcing_cost: "system",
+  // الحقل إلزامي في OrderFormData — Hook يدير حالته منفصلًا بقيمة افتراضية مغلقة.
+  // Required in OrderFormData; the hook manages its own state closed by default.
+  homeDeliveryEnabled: false,
 });
 
 /** بيانات نموذج التحديث الافتراضية - Default status update form data */
@@ -134,23 +141,23 @@ const defaultUpdateFormData = (): UpdateFormData => ({
   orderStatus: ORDER_DEFAULT_VALUES.orderStatus,
   deliveryStatus: ORDER_DEFAULT_VALUES.deliveryStatus,
   locationYemen: ORDER_DEFAULT_VALUES.deliveryLocation,
-  internalNotes: '',
-  shippingCourierId: '',
-  deliveryCourierId: '',
+  internalNotes: "",
+  shippingCourierId: "",
+  deliveryCourierId: "",
 });
 
 /** بيانات نموذج الدفع الافتراضية - Default payment form data */
 const defaultPaymentFormData = (): PaymentFormData => ({
-  amount: '',
+  amount: "",
   method: ORDER_DEFAULT_VALUES.paymentMethod,
-  receivingAccountId: '',
-  bankReference: '',
+  receivingAccountId: "",
+  bankReference: "",
   allocations: [],
-  notes: '',
-  pin: '',
+  notes: "",
+  pin: "",
   paymentCurrency: ORDER_DEFAULT_VALUES.paymentCurrency,
-  voucherDate: '',
-  voucherNumber: '',
+  voucherDate: "",
+  voucherNumber: "",
 });
 
 // ─── نتيجة الـ Hook ─────────────────────────────────────────────────────────
@@ -186,7 +193,9 @@ export interface OrderFormStateResult {
 
   // نموذج شركة الشحن السريعة
   shippingCompanyFormData: ShippingCompanyFormData;
-  setShippingCompanyFormData: React.Dispatch<React.SetStateAction<ShippingCompanyFormData>>;
+  setShippingCompanyFormData: React.Dispatch<
+    React.SetStateAction<ShippingCompanyFormData>
+  >;
 
   // نموذج المصدر السريع
   sourceFormData: SourceFormData;
@@ -197,8 +206,8 @@ export interface OrderFormStateResult {
   setBankCommissionEnabled: (v: boolean) => void;
   bankCommissionRate: number;
   setBankCommissionRate: (v: number) => void;
-  bankCommissionType: 'percentage' | 'fixed';
-  setBankCommissionType: (v: 'percentage' | 'fixed') => void;
+  bankCommissionType: "percentage" | "fixed";
+  setBankCommissionType: (v: "percentage" | "fixed") => void;
   couponEnabled: boolean;
   setCouponEnabled: (v: boolean) => void;
   couponRate: number;
@@ -225,7 +234,12 @@ export interface OrderFormStateResult {
   setDirectApprove: (v: boolean) => void;
 
   /** إعادة تعيين نموذج الإنشاء - Reset creation form to defaults */
-  resetCreateForm: (orderCurrency: string, currency: string, settings?: OrderDefaultsSettings, dbRates?: Record<string, number>) => void;
+  resetCreateForm: (
+    orderCurrency: string,
+    currency: string,
+    settings?: OrderDefaultsSettings,
+    dbRates?: Record<string, number>
+  ) => void;
 
   // مساعدات صفوف المنتجات
   addItemRow: () => void;
@@ -233,11 +247,22 @@ export interface OrderFormStateResult {
   removeItemRow: (idx: number) => void;
 
   // مساعدات صفوف الشحن
-  addShippingRow: (settings?: OrderDefaultsSettings, orderSourceType?: string) => void;
-  updateShippingRow: (idx: number, fieldOrObj: string | Record<string, unknown>, val?: unknown) => void;
+  addShippingRow: (
+    settings?: OrderDefaultsSettings,
+    orderSourceType?: string
+  ) => void;
+  updateShippingRow: (
+    idx: number,
+    fieldOrObj: string | Record<string, unknown>,
+    val?: unknown
+  ) => void;
   removeShippingRow: (idx: number, orderSourceType?: string) => void;
   addUpdateShippingRow: () => void;
-  updateUpdateShippingRow: (idx: number, fieldOrObj: string | Record<string, unknown>, val?: unknown) => void;
+  updateUpdateShippingRow: (
+    idx: number,
+    fieldOrObj: string | Record<string, unknown>,
+    val?: unknown
+  ) => void;
   removeUpdateShippingRow: (idx: number) => void;
 }
 
@@ -251,48 +276,57 @@ export interface OrderFormStateResult {
  */
 export function useOrderFormState(
   orderCurrency: string,
-  currency: string,
+  currency: string
 ): OrderFormStateResult {
   const [formData, setFormData] = useState<OrderFormData>(
-    defaultOrderFormData(orderCurrency, currency),
+    defaultOrderFormData(orderCurrency, currency)
   );
   const [items, setItems] = useState<ItemRow[]>([defaultItemRow()]);
-  const [shippings, setShippings] = useState<ShippingRow[]>([defaultShippingRow()]);
+  const [shippings, setShippings] = useState<ShippingRow[]>([
+    defaultShippingRow(),
+  ]);
   const [updateShippings, setUpdateShippings] = useState<ShippingRow[]>([]);
-  const [updateFormData, setUpdateFormData] = useState<UpdateFormData>(defaultUpdateFormData());
-  const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>(defaultPaymentFormData());
+  const [updateFormData, setUpdateFormData] = useState<UpdateFormData>(
+    defaultUpdateFormData()
+  );
+  const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>(
+    defaultPaymentFormData()
+  );
   const [customerFormData, setCustomerFormData] = useState<CustomerFormData>({
-    fullName: '',
-    phone: '',
-    email: '',
-    gps_location: '',
-    address: '',
-    notes: '',
+    fullName: "",
+    phone: "",
+    email: "",
+    gps_location: "",
+    address: "",
+    notes: "",
   });
-  const [shippingCompanyFormData, setShippingCompanyFormData] = useState<ShippingCompanyFormData>({
-    name: '',
-    contact_person: '',
-    phone: '',
-    tracking_url: '',
-    address: '',
-    notes: '',
-  });
+  const [shippingCompanyFormData, setShippingCompanyFormData] =
+    useState<ShippingCompanyFormData>({
+      name: "",
+      contact_person: "",
+      phone: "",
+      tracking_url: "",
+      address: "",
+      notes: "",
+    });
   const [sourceFormData, setSourceFormData] = useState<SourceFormData>({
-    source_name: '',
+    source_name: "",
     type: ORDER_DEFAULT_VALUES.sourceType,
-    source_url: '',
-    contact_info: '',
-    location: '',
-    notes: '',
+    source_url: "",
+    contact_info: "",
+    location: "",
+    notes: "",
   });
 
   // خيارات الإنشاء
   const [bankCommissionEnabled, setBankCommissionEnabled] = useState(false);
   const [bankCommissionRate, setBankCommissionRate] = useState(3);
-  const [bankCommissionType, setBankCommissionType] = useState<'percentage' | 'fixed'>('percentage');
+  const [bankCommissionType, setBankCommissionType] = useState<
+    "percentage" | "fixed"
+  >("percentage");
   const [couponEnabled, setCouponEnabled] = useState(false);
   const [couponRate, setCouponRate] = useState(0);
-  const [cartShareCode, setCartShareCode] = useState('');
+  const [cartShareCode, setCartShareCode] = useState("");
   const [addShippingEnabled, setAddShippingEnabled] = useState(false);
   const [profitPerKgRate, setProfitPerKgRate] = useState(19);
   const [cbmShippingRateValue, setCbmShippingRateValue] = useState(1400);
@@ -308,28 +342,40 @@ export function useOrderFormState(
     oc: string,
     cur: string,
     settings?: OrderDefaultsSettings,
-    dbRates?: Record<string, number>,
+    dbRates?: Record<string, number>
   ) => {
     setFormData({
       ...defaultOrderFormData(oc, cur),
       currency: oc,
       exchangeRate: dbRates?.[oc] || 1,
       exchangeRateYER: dbRates?.[oc] || 1,
-      exchangeRateUSD: dbRates?.['USD'] || 1,
-      bankCommissionRate: numberSetting(settings, 'defaultBankCommissionRate', 3),
-      companyProfitRate: numberSetting(settings, 'defaultCompanyProfitRate', 12),
-      packagingFee: numberSetting(settings, 'defaultPackagingFee', 0),
-      deliveryCourierFee: numberSetting(settings, 'defaultDeliveryFee', 4000),
-      shippingCourierFeeRate: numberSetting(settings, 'defaultCourierCommissionRate', 30),
+      exchangeRateUSD: dbRates?.["USD"] || 1,
+      bankCommissionRate: numberSetting(
+        settings,
+        "defaultBankCommissionRate",
+        3
+      ),
+      companyProfitRate: numberSetting(
+        settings,
+        "defaultCompanyProfitRate",
+        12
+      ),
+      packagingFee: numberSetting(settings, "defaultPackagingFee", 0),
+      deliveryCourierFee: numberSetting(settings, "defaultDeliveryFee", 4000),
+      shippingCourierFeeRate: numberSetting(
+        settings,
+        "defaultCourierCommissionRate",
+        30
+      ),
     });
     setItems([defaultItemRow()]);
     setShippings([defaultShippingRow()]);
     setBankCommissionEnabled(false);
     setBankCommissionRate(3);
-    setBankCommissionType('percentage');
+    setBankCommissionType("percentage");
     setCouponEnabled(false);
     setCouponRate(0);
-    setCartShareCode('');
+    setCartShareCode("");
     setPackagingFeeEnabled(false);
     setPackagingFeeRate(0);
     setHomeDeliveryEnabled(false);
@@ -341,12 +387,12 @@ export function useOrderFormState(
 
   /** إضافة صف منتج جديد - Add a new product row */
   const addItemRow = () => {
-    setItems((prev) => [...prev, defaultItemRow()]);
+    setItems(prev => [...prev, defaultItemRow()]);
   };
 
   /** تعديل حقل في صف منتج محدد - Update a field in a product row */
   const updateItemRow = (idx: number, field: string, val: unknown) => {
-    setItems((prev) => {
+    setItems(prev => {
       const updated = [...prev];
       updated[idx] = { ...updated[idx], [field]: val };
       return updated;
@@ -356,25 +402,28 @@ export function useOrderFormState(
   /** حذف صف منتج (لا يمكن حذف الأخير) - Remove a product row (cannot remove last) */
   const removeItemRow = (idx: number) => {
     if (items.length === 1) return;
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setItems(prev => prev.filter((_, i) => i !== idx));
   };
 
   // ── مساعدات صفوف الشحن (الإنشاء) ──
 
   /** إضافة صف شحن جديد - Add a new shipping row */
-  const addShippingRow = (settings?: OrderDefaultsSettings, orderSourceType?: string) => {
+  const addShippingRow = (
+    settings?: OrderDefaultsSettings,
+    orderSourceType?: string
+  ) => {
     const today = toDateInputValue();
     const defaultDuration =
-      orderSourceType === 'SHEIN'
-        ? numberSetting(settings, 'defaultSheinDuration', 12)
-        : orderSourceType === 'Factory'
-        ? numberSetting(settings, 'defaultFactoryDuration', 20)
-        : numberSetting(settings, 'defaultAppDuration', 10);
+      orderSourceType === "SHEIN"
+        ? numberSetting(settings, "defaultSheinDuration", 12)
+        : orderSourceType === "Factory"
+          ? numberSetting(settings, "defaultFactoryDuration", 20)
+          : numberSetting(settings, "defaultAppDuration", 10);
     const arrivalDate = new Date();
     arrivalDate.setDate(arrivalDate.getDate() + defaultDuration);
     const expectedArrival = toDateInputValue(arrivalDate);
 
-    setShippings((prev) => [
+    setShippings(prev => [
       ...prev,
       {
         ...defaultShippingRow(),
@@ -384,7 +433,7 @@ export function useOrderFormState(
       },
     ]);
 
-    if (orderSourceType === 'App') {
+    if (orderSourceType === "App") {
       setAddShippingEnabled(true);
     }
   };
@@ -393,18 +442,18 @@ export function useOrderFormState(
   const updateShippingRow = (
     idx: number,
     fieldOrObj: string | Record<string, unknown>,
-    val?: unknown,
+    val?: unknown
   ) => {
-    setShippings((prev) => {
+    setShippings(prev => {
       const updated = [...prev];
-      if (typeof fieldOrObj === 'string') {
+      if (typeof fieldOrObj === "string") {
         updated[idx] = { ...updated[idx], [fieldOrObj]: val };
-        if (fieldOrObj === 'shippingCost') {
+        if (fieldOrObj === "shippingCost") {
           updated[idx]._isCalculated = false;
         }
       } else {
         updated[idx] = { ...updated[idx], ...fieldOrObj };
-        if ('shippingCost' in fieldOrObj) {
+        if ("shippingCost" in fieldOrObj) {
           updated[idx]._isCalculated = false;
         }
       }
@@ -416,12 +465,12 @@ export function useOrderFormState(
   const removeShippingRow = (idx: number, orderSourceType?: string) => {
     if (shippings.length === 1) {
       setShippings([]);
-      if (orderSourceType === 'App') {
+      if (orderSourceType === "App") {
         setAddShippingEnabled(false);
       }
       return;
     }
-    setShippings((prev) => prev.filter((_, i) => i !== idx));
+    setShippings(prev => prev.filter((_, i) => i !== idx));
   };
 
   // ── مساعدات صفوف الشحن (التحديث) ──
@@ -429,13 +478,13 @@ export function useOrderFormState(
   /** إضافة صف شحن للتحديث - Add a shipping row for status update */
   const addUpdateShippingRow = () => {
     const today = toDateInputValue();
-    setUpdateShippings((prev) => [
+    setUpdateShippings(prev => [
       ...prev,
       {
         ...defaultShippingRow(),
         shippingDate: today,
-        shippingDuration: '',
-        expectedArrival: '',
+        shippingDuration: "",
+        expectedArrival: "",
       },
     ]);
   };
@@ -444,11 +493,11 @@ export function useOrderFormState(
   const updateUpdateShippingRow = (
     idx: number,
     fieldOrObj: string | Record<string, unknown>,
-    val?: unknown,
+    val?: unknown
   ) => {
-    setUpdateShippings((prev) => {
+    setUpdateShippings(prev => {
       const updated = [...prev];
-      if (typeof fieldOrObj === 'string') {
+      if (typeof fieldOrObj === "string") {
         updated[idx] = { ...updated[idx], [fieldOrObj]: val };
       } else {
         updated[idx] = { ...updated[idx], ...fieldOrObj };
@@ -459,7 +508,7 @@ export function useOrderFormState(
 
   /** حذف صف شحن التحديث - Remove an update shipping row */
   const removeUpdateShippingRow = (idx: number) => {
-    setUpdateShippings((prev) => prev.filter((_, i) => i !== idx));
+    setUpdateShippings(prev => prev.filter((_, i) => i !== idx));
   };
 
   return {

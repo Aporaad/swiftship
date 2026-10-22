@@ -153,7 +153,19 @@ export type PermissionKey =
   | 'view_order_items'
   | 'edit_order_items'
   | 'return_order_items'
-  | 'unpost_posted_orders';
+  | 'unpost_posted_orders'
+  | 'features.contests.read'
+  | 'features.contests.manage'
+  | 'features.entries.review'
+  | 'features.draw.execute'
+  | 'features.winners.approve'
+  | 'features.prizes.read'
+  | 'features.prizes.manage'
+  | 'features.prizes.fulfill'
+  | 'features.coupons.read'
+  | 'features.coupons.manage'
+  | 'features.coupons.revoke'
+  | 'features.reports.read';
 
 
 export interface PermissionDefinition {
@@ -180,6 +192,7 @@ export const PERMISSION_CATEGORIES = {
   reports: { ar: 'التقارير', en: 'Reports' },
   admin: { ar: 'المسؤول وإعدادات النظام', en: 'System Administration' },
   notifications: { ar: 'الإشعارات وتنبيهات النظام', en: 'Notifications & Alerts' },
+  features: { ar: 'إدارة المميزات', en: 'Features Management' },
 };
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
@@ -361,6 +374,19 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_company_info', labelAr: 'تعديل كرت تعريف وسجل وعنوان الشركة والمستند الضريبي', labelEn: 'Update Corporate Card details & Tax Registration', category: 'admin' },
   { id: 'view_website_management', labelAr: 'عرض واجهة إدارة الموقع الإلكتروني', labelEn: 'View Website Management', category: 'admin' },
   { id: 'manage_website', labelAr: 'إدارة إعدادات ومحتوى الموقع الإلكتروني', labelEn: 'Manage Website Settings & Content', category: 'admin' },
+  // Features management — permissions mirror the API's canonical dotted codes.
+  { id: 'features.contests.read', labelAr: 'عرض المسابقات', labelEn: 'View Contests', category: 'features' },
+  { id: 'features.contests.manage', labelAr: 'إدارة المسابقات', labelEn: 'Manage Contests', category: 'features' },
+  { id: 'features.entries.review', labelAr: 'مراجعة مشاركات المسابقات', labelEn: 'Review Contest Entries', category: 'features' },
+  { id: 'features.draw.execute', labelAr: 'تجميد الأهلية وتعيين الفائزين', labelEn: 'Freeze Eligibility and Assign Winners', category: 'features' },
+  { id: 'features.winners.approve', labelAr: 'اعتماد نتائج الفائزين', labelEn: 'Approve Winner Results', category: 'features' },
+  { id: 'features.prizes.read', labelAr: 'عرض الجوائز', labelEn: 'View Prizes', category: 'features' },
+  { id: 'features.prizes.manage', labelAr: 'إدارة الجوائز', labelEn: 'Manage Prizes', category: 'features' },
+  { id: 'features.prizes.fulfill', labelAr: 'تنفيذ وتسليم الجوائز', labelEn: 'Fulfill Prizes', category: 'features' },
+  { id: 'features.coupons.read', labelAr: 'عرض الكوبونات', labelEn: 'View Coupons', category: 'features' },
+  { id: 'features.coupons.manage', labelAr: 'إدارة الكوبونات', labelEn: 'Manage Coupons', category: 'features' },
+  { id: 'features.coupons.revoke', labelAr: 'سحب الكوبونات', labelEn: 'Revoke Coupons', category: 'features' },
+  { id: 'features.reports.read', labelAr: 'عرض تقارير المميزات', labelEn: 'View Features Reports', category: 'features' },
   { id: 'manage_whatsapp', labelAr: 'التحكم وحفظ مفاتيح ربط واتساب السحابي ودرجات التفعيل', labelEn: 'Configure UltraMsg/Twilio WhatsApp routing setups', category: 'admin' },
   { id: 'manage_backup', labelAr: 'التحكم وإجراء النسخ التلقائي وبناء ملفات استيراد وتوطين الكيانات والمطابقة للمدراء', labelEn: 'Perform Rebase backups: Import / Export datablocks', category: 'admin' },
 

@@ -6091,3 +6091,162 @@ SELECT portal_user_id, linked_customer_id FROM public.portal_users LIMIT 5;
   - `SELECT n.nspname AS schema_name, c.relname AS table_name, c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS rls_forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname LIKE 'feature_%' ORDER BY c.relname LIMIT 100;`
 - **نتيجة التحقق:** الجداول العشرة موجودة، الصلاحيات الست موجودة ومسندة إلى admin، وRLS للجداول الجديدة `false` طبقًا للتفويض.
 - **لم ينفذ dry-run:** تم التطبيق المباشر بناءً على أمر المالك، وهو انحراف موثق عن بوابة P4.
+
+## [2026-10-21 12:00 (+03:00)] — التحقق الحي عبر Supabase MCP لميزات P9–P12 — Qoder
+- **المشروع:** Supabase `ejrojwbbflzchasvgexr`.
+- **migration مطبّق سابقًا (وثيق):** `apply_migration(name='features_winners_coupons_0050')` بالنص في `alx_api/src/db/migrations/0050_features_winners_coupons.sql` (توسيع حالات entry إلى 'winner'، `quantity_awarded`، أعمدة fulfillment في winner_awards وrevoke في issuances، وصلاحيات `features.*` لـ admin).
+- **استعلامات تحقق SELECT المنفذة (قراءة فقط، بدون تنفيذ أي أمر وارد من الرد):**
+  - `SELECT table_name, (SELECT count(*) FROM information_schema.columns c WHERE c.table_name = t.table_name AND c.table_schema='public') AS col_count FROM information_schema.tables t WHERE t.table_schema='public' AND t.table_name LIKE 'feature_%' ORDER BY table_name;` → الجداول العشرة موجودة.
+  - `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='feature_coupon_redemptions' ORDER BY ordinal_position;` → أعمدة الاسترداد كاملة (`amount_applied` numeric، reserved/redeemed/reversed_at).
+  - `SELECT conname, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conrelid = 'public.feature_coupon_redemptions'::regclass AND contype IN ('u','p');` → `UNIQUE (order_id)` و`PRIMARY KEY (redemption_id)`.
+- **لم ينفذ أي DDL/DML في هذه الجولة؛ قراءة فقط للتحقق.**
+
+## [2026-10-21 06:55] — جولة تدقيق إغلاق الفجوات (P13): لا أوامر SQL نُفِّذت — Qoder
+- **المشروع:** Supabase `ejrojwbbflzchasvgexr`.
+- لم يُنفَّذ أي أمر SQL (DDL/DML) في هذه الجولة: مفتاح المميزات بيئي/خادمي فقط، والاستعلام الجديد `listEntriesForCustomer` يعتمد جداول وأعمدة موجودة منذ migration 0050.
+- محاولة التحقق بالقراءة عبر موصل Supabase MCP (`SELECT table_name ... FROM information_schema.tables WHERE table_name LIKE 'feature_%'`) توقفت برسالة "requires OAuth authorization" — انتهت صلاحية تفويض الموصل؛ سيُعاد التحقق بعد إعادة التفويض.
+
+
+## [2026-10-22 02:18:22 +03:00] — تدقيق امتيازات/RLS جداول الميزات — Manus (قراءة فقط)
+- **المشروع:** Supabase `ejrojwbbflzchasvgexr`.
+- **الأمر SQL المنفذ حرفيًا:**
+```sql
+SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS rls_forced, has_table_privilege('anon', c.oid, 'SELECT') AS anon_select, has_table_privilege('anon', c.oid, 'INSERT') AS anon_insert, has_table_privilege('authenticated', c.oid, 'SELECT') AS authenticated_select, has_table_privilege('authenticated', c.oid, 'INSERT') AS authenticated_insert, has_table_privilege('alx_api_runtime', c.oid, 'SELECT') AS runtime_select, has_table_privilege('alx_api_runtime', c.oid, 'INSERT') AS runtime_insert, has_table_privilege('alx_api_runtime', c.oid, 'UPDATE') AS runtime_update FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname = ANY (ARRAY['feature_contests','feature_prizes','feature_contest_prizes','feature_contest_entries','feature_draw_runs','feature_winner_awards','feature_coupon_rules','feature_coupon_issuances','feature_coupon_redemptions','feature_audit_events']) ORDER BY c.relname LIMIT 20;
+```
+- **النتيجة:** 10/10 جداول: RLS/ FORCE RLS معطلان؛ `anon` و`authenticated` يملكان SELECT وINSERT؛ `alx_api_runtime` لا يملك SELECT أو INSERT أو UPDATE.
+- **العملية للقراءة فقط؛** لم ينفذ DDL/DML ولم تُقرأ صفوف عملاء أو قسائم.
+- استدعاء `list_migrations` في الوقت نفسه أثبت تسجيل 0048–0050 وعدم تسجيل 0051؛ واستدعاء `get_advisors` أظهر RLS disabled errors على مستوى المشروع.
+
+
+## [2026-10-22 03:13:25 +03:00] — migration 0051 grants runtime والتحقق الحي — Manus
+- **المشروع:** Supabase `ejrojwbbflzchasvgexr`.
+- **SQL المنفذ في migration `features_runtime_grants_0051`:**
+```sql
+GRANT SELECT, INSERT, UPDATE ON public.feature_contests TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.feature_prizes TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.feature_contest_prizes TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.feature_contest_entries TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.feature_draw_runs TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.feature_winner_awards TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.feature_coupon_rules TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.feature_coupon_issuances TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON public.feature_coupon_redemptions TO alx_api_runtime;
+GRANT SELECT, INSERT ON public.feature_audit_events TO alx_api_runtime;
+```
+- **استعلام التحقق المنفذ حرفيًا (metadata فقط):**
+```sql
+SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled, has_table_privilege('alx_api_runtime', c.oid, 'SELECT') AS runtime_select, has_table_privilege('alx_api_runtime', c.oid, 'INSERT') AS runtime_insert, has_table_privilege('alx_api_runtime', c.oid, 'UPDATE') AS runtime_update, has_table_privilege('anon', c.oid, 'SELECT') AS anon_select, has_table_privilege('anon', c.oid, 'INSERT') AS anon_insert, has_table_privilege('authenticated', c.oid, 'SELECT') AS authenticated_select, has_table_privilege('authenticated', c.oid, 'INSERT') AS authenticated_insert FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname LIKE 'feature_%' ORDER BY c.relname LIMIT 10;
+```
+- **النتيجة:** 10 صفوف metadata؛ runtime يملك الصلاحيات المطلوبة، وسجل التدقيق لا يملك UPDATE. RLS=false وامتيازات anon/authenticated SELECT/INSERT=true بقيت كما هي بتوجيه المالك. لم يُجر أي DML على بيانات الأعمال.
+
+
+## 2026-10-22 05:42 (+03:00) — النموذج المنفذ: Manus — أوامر Supabase الفعلية
+### apply_migration: `features_draw_snapshot_entries_0052`
+```sql
+CREATE TABLE IF NOT EXISTS public.feature_draw_snapshot_entries (
+  draw_run_id uuid NOT NULL REFERENCES public.feature_draw_runs(draw_run_id) ON DELETE RESTRICT,
+  entry_id uuid NOT NULL REFERENCES public.feature_contest_entries(entry_id) ON DELETE RESTRICT,
+  customer_id text NOT NULL,
+  snapshot_position integer NOT NULL CHECK (snapshot_position > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (draw_run_id, entry_id),
+  CONSTRAINT feature_draw_snapshot_entries_position_uidx UNIQUE (draw_run_id, snapshot_position)
+);
+CREATE INDEX IF NOT EXISTS feature_draw_snapshot_entries_entry_idx ON public.feature_draw_snapshot_entries(entry_id);
+REVOKE UPDATE, DELETE ON public.feature_draw_snapshot_entries FROM alx_api_runtime;
+GRANT SELECT, INSERT ON public.feature_draw_snapshot_entries TO alx_api_runtime;
+```
+
+### apply_migration: `features_coupon_lifecycle_outbox_0054`
+```sql
+CREATE TABLE IF NOT EXISTS public.feature_notification_outbox (
+  outbox_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_key text NOT NULL UNIQUE,
+  award_id uuid NOT NULL REFERENCES public.feature_winner_awards(award_id) ON DELETE RESTRICT,
+  portal_user_id text NOT NULL,
+  notification_type text NOT NULL CHECK (notification_type = 'winner_award'),
+  status text NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','processing','sent','failed','cancelled')),
+  attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  sent_at timestamptz,
+  error_message text
+);
+CREATE UNIQUE INDEX IF NOT EXISTS feature_notification_outbox_award_uidx ON public.feature_notification_outbox(award_id);
+CREATE INDEX IF NOT EXISTS feature_notification_outbox_pending_idx ON public.feature_notification_outbox(status, created_at);
+GRANT SELECT, INSERT, UPDATE ON public.feature_notification_outbox TO alx_api_runtime;
+CREATE OR REPLACE FUNCTION public.feature_release_award_inventory() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$ BEGIN IF NEW.status IN ('expired', 'rejected') AND OLD.status NOT IN ('expired', 'rejected') THEN UPDATE public.feature_contest_prizes SET quantity_awarded = GREATEST(quantity_awarded - 1, 0) WHERE contest_prize_id = NEW.contest_prize_id AND quantity_awarded > 0; UPDATE public.feature_prizes p SET quantity_reserved = GREATEST(quantity_reserved - 1, 0), status = CASE WHEN p.status = 'exhausted' AND p.quantity_reserved > 1 THEN 'active' ELSE p.status END, updated_at = now() FROM public.feature_contest_prizes cp WHERE cp.contest_prize_id = NEW.contest_prize_id AND p.prize_id = cp.prize_id AND p.quantity_reserved > 0; END IF; RETURN NEW; END; $$;
+DROP TRIGGER IF EXISTS feature_release_award_inventory_trigger ON public.feature_winner_awards;
+CREATE TRIGGER feature_release_award_inventory_trigger AFTER UPDATE OF status ON public.feature_winner_awards FOR EACH ROW EXECUTE FUNCTION public.feature_release_award_inventory();
+CREATE OR REPLACE FUNCTION public.feature_sync_coupon_redemption_with_order() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$ DECLARE next_status text := lower(coalesce(NEW.order_status1, '')); BEGIN IF next_status IN ('accepted', 'in_progress', 'out_for_delivery', 'delivered') THEN UPDATE public.feature_coupon_redemptions SET status = 'redeemed', redeemed_at = COALESCE(redeemed_at, now()) WHERE order_id = NEW.order_id AND status = 'reserved'; UPDATE public.feature_coupon_issuances i SET status = 'redeemed' FROM public.feature_coupon_redemptions r WHERE r.order_id = NEW.order_id AND r.issuance_id = i.issuance_id AND r.status = 'redeemed' AND i.status = 'reserved'; ELSIF next_status IN ('cancelled', 'canceled', 'rejected', 'رفض', 'ملغي', 'ملغى') THEN UPDATE public.feature_coupon_redemptions SET status = 'released', reason = COALESCE(reason, 'order_cancelled') WHERE order_id = NEW.order_id AND status = 'reserved'; UPDATE public.feature_coupon_rules r SET usage_count = GREATEST(usage_count - 1, 0), updated_at = now() FROM public.feature_coupon_redemptions x WHERE x.order_id = NEW.order_id AND x.coupon_id = r.coupon_id AND x.status = 'released'; UPDATE public.feature_coupon_issuances i SET status = 'issued' FROM public.feature_coupon_redemptions x WHERE x.order_id = NEW.order_id AND x.issuance_id = i.issuance_id AND x.status = 'released' AND i.status = 'reserved'; END IF; RETURN NEW; END; $$;
+DROP TRIGGER IF EXISTS feature_sync_coupon_redemption_order_trigger ON public.orders;
+CREATE TRIGGER feature_sync_coupon_redemption_order_trigger AFTER UPDATE OF order_status1 ON public.orders FOR EACH ROW WHEN (OLD.order_status1 IS DISTINCT FROM NEW.order_status1) EXECUTE FUNCTION public.feature_sync_coupon_redemption_with_order();
+```
+
+### execute_sql verification
+```sql
+SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled, has_table_privilege('alx_api_runtime', c.oid, 'SELECT') AS runtime_select, has_table_privilege('alx_api_runtime', c.oid, 'INSERT') AS runtime_insert, has_table_privilege('alx_api_runtime', c.oid, 'UPDATE') AS runtime_update FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname IN ('feature_draw_snapshot_entries','feature_notification_outbox') ORDER BY c.relname LIMIT 10;
+SELECT t.tgname, c.relname AS table_name, p.proname AS function_name FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid WHERE NOT t.tgisinternal AND t.tgname IN ('feature_release_award_inventory_trigger','feature_sync_coupon_redemption_order_trigger') ORDER BY t.tgname LIMIT 10;
+```
+- `0053` وأوامر RLS وREVOKE الخاصة بـ`anon/authenticated` لم تُنفذ بناءً على طلب المستخدم.
+
+
+## 2026-10-22 06:11 (+03:00) — النموذج المنفذ: Manus — apply_migration `feature_outbox_worker_locking_0055`
+```sql
+ALTER TABLE public.feature_notification_outbox
+  ADD COLUMN IF NOT EXISTS locked_at timestamptz,
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS feature_notification_outbox_claim_idx
+  ON public.feature_notification_outbox(status, locked_at, created_at);
+GRANT SELECT, UPDATE ON public.feature_notification_outbox TO alx_api_runtime;
+```
+
+### execute_sql verification
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'feature_notification_outbox'
+  AND column_name IN ('locked_at','updated_at')
+ORDER BY column_name LIMIT 10;
+
+SELECT indexname
+FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = 'feature_notification_outbox'
+  AND indexname = 'feature_notification_outbox_claim_idx'
+LIMIT 10;
+
+SELECT has_table_privilege('alx_api_runtime', 'public.feature_notification_outbox', 'SELECT') AS runtime_select,
+       has_table_privilege('alx_api_runtime', 'public.feature_notification_outbox', 'UPDATE') AS runtime_update;
+```
+- النتيجة: تم تطبيق migration بنجاح، وصلاحيات runtime SELECT/UPDATE متاحة. لم تُنفذ أوامر RLS أو إزالة صلاحيات anon/authenticated.
+
+
+## 2026-10-23 00:10 (+03:00) — Qoder — تشخيص قراءة-فقط لخطأ 500 انتقال المسابقة (بدون أي تغيير دائم)
+
+لم يُنفَّذ أي كتابة على البيانات؛ كل ما يلي إما استعلامات قراءة فقط أو معاملة أُلغيت صراحة بـ ROLLBACK.
+
+```sql
+-- فحص القراءة فقط (دور runtime = alx_api_runtime)
+SELECT current_user, current_setting('server_version');
+SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+SELECT EXISTS(SELECT 1 FROM information_schema.tables
+  WHERE table_schema='public' AND table_name='feature_audit_events') AS ex;
+SELECT column_name FROM information_schema.columns
+  WHERE table_schema='public' AND table_name='feature_audit_events' ORDER BY ordinal_position;
+SELECT has_table_privilege(current_user,'public.feature_audit_events','INSERT') AS ins;
+SELECT has_table_privilege(current_user,'public.feature_contests','UPDATE') AS upd;
+SELECT contest_id, status FROM public.feature_contests
+  WHERE contest_id='e8689715-f22a-428a-bb2a-1ef52572f68a' LIMIT 1;
+SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class
+  WHERE relname IN ('feature_audit_events','feature_contests');
+
+-- إعادة إنتاج جمل المستودع الحرفية داخل معاملة مُلغاة (لا تثبيت):
+BEGIN;
+UPDATE public.feature_contests SET status = CASE ... END, updated_at = now(), updated_by = $3
+  WHERE contest_id = $1 AND status <> CASE ... END RETURNING contest_id, status;
+INSERT INTO public.feature_audit_events (entity_type, entity_id, event_type, actor_user_id, request_id, reason, after_state)
+  VALUES ('contest', $1, $2, $3, $4, $5, $6);
+ROLLBACK;  -- تم التراجع عمدًا؛ لا تغيير في أي صف
+```
+- النتيجة: الجدول والأعمدة والمنح موجودة، RLS معطّلة، المسابقة published، وإعادة الإنتاج نجحت (UPDATE أرجع active وINSERT صف واحد) ثم أُلغيت — إثبات أن SQL ليس سبب الـ500؛ السبب تعيين صنف أخطاء p6 في طبقة HTTP.

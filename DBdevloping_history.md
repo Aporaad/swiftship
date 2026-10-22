@@ -2071,3 +2071,44 @@ COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول 
 - أضيفت وثائق `docs/featuresManagement/P4-P5-implementation.md` و`alx_api/docs/table-registry.md`.
 - التحقق: `npm run check` ناجح، و51 suite / 453 test ناجحة.
 - **تغيير قاعدة البيانات:** نعم، تم تطبيق DDL وRBAC مباشرة. تم تجاوز RLS وdry-run بتفويض صريح وسجل ذلك كدين أمني قبل الإطلاق العام.
+
+## [2026-10-21 12:00 (+03:00)] — التحقق الحي من ميزات P9–P12 — Qoder
+- تحقق حي عبر Supabase MCP من وجود الجداول العشرة `feature_*` في المشروع `ejrojwbbflzchasvgexr` بعد تطبيق `0050_features_winners_coupons`.
+- تأكيد أن `public.feature_coupon_redemptions` يحتوي `order_id` بقيد `UNIQUE (order_id)` — أساس منع الاستهلاك المزدوج في P9.
+- لا DDL/DML جديد في هذه الجولة؛ الكود فقط (اختبارات + واجهات) دون تعديل المخطط.
+
+## [2026-10-21 06:55] — تدقيق إغلاق الفجوات (P13 + §10.2) وعدم وجود تغييرات مخططات — Qoder
+- لا DDL/DML نُفِّذ في هذه الجولة: المفتاح `FEATURES_MANAGEMENT_ENABLED` بيئي/خادمي فقط ولا يمس المخطط؛ الاستردادات المحظورة عند الإيقاف تُمنع في الطبقة الخادمية دون تغيير الجداول.
+- استعلام القراءة الجديد `listEntriesForCustomer` يعتمد أعمدة قائمة منذ migration 0050 (`feature_contest_entries.entry_id/contest_id/customer_id/status/terms_version/terms_accepted_at/created_at` + `feature_contests.title`) — لا أعمدة جديدة مطلوبة.
+- تعذّر التحقق الحي من هذه الأعمدة عبر موصل Supabase في هذه الجلسة (انتهت صلاحية تفويض OAuth للموصل)؛ التحقق السابق من الجداول العشرة `feature_*` موثق أعلاه بتاريخ 12:00، وخطة 0050 مطبقة ولم تتغير.
+- مهمة لاحقة: إعادة تفويض الموصل ثم تشغيل استعلامات READ-only تطابقية لتأكيد أعمدة `feature_contest_entries` قبل التشغيل الإنتاجي.
+
+
+## [2026-10-22 03:13:25 +03:00] — تطبيق منح تشغيل API لميزة featuresManagement — Manus
+- **المشروع:** Supabase `ejrojwbbflzchasvgexr`.
+- **التغيير المنفذ:** تطبيق migration `features_runtime_grants_0051` لمنح `alx_api_runtime` SELECT/INSERT/UPDATE على الجداول التشغيلية التسعة وSELECT/INSERT على سجل التدقيق.
+- **التحقق الحي:** دور `alx_api_runtime` يملك الصلاحيات المطلوبة؛ `feature_audit_events` بقي بلا UPDATE. جداول الميزات العشرة ما زالت `rls_enabled=false`، وما زال `anon` و`authenticated` يملكان SELECT/INSERT كما كانا قبل العملية.
+- **استثناء بناءً على توجيه المالك:** لم يُفعّل RLS ولم تُغيّر صلاحيات `anon` أو `authenticated`؛ لذلك خطر قراءة/إضافة البيانات مباشرةً خارج API لا يزال مفتوحًا ومُعلنًا.
+- **لم تُمس بيانات الأعمال ولم تُنفذ أي عمليات INSERT/UPDATE على صفوف المستخدمين؛** التغيير الوحيد هو DCL لمنح دور runtime.
+
+
+## 2026-10-22 05:31 (+03:00) — Manus — تغييرات قاعدة البيانات المحلية فقط
+- أُضيف `alx_api/src/db/migrations/0052_features_draw_snapshot_entries.sql` لإنشاء جدول عضوية snapshot المجمدة مع مفاتيح وقيود تمنع تكرار المشارك أو موضعه داخل عملية السحب.
+- أُضيف `alx_api/src/db/migrations/0053_features_security_rls.sql` كترحيل أمني forward-fix لإزالة امتيازات `anon` و`authenticated` عن جداول المميزات، وتفعيل/فرض RLS، ومنح `alx_api_runtime` أقل امتياز لازم مع سياسات runtime.
+- حُدث `alx_api/docs/table-registry.md` لإضافة الجدول والترحيلات وحالة التطبيق المحلي.
+- الترحيلات محلية فقط ولم تُطبق على قاعدة حية؛ يلزم staging ومراجعة صلاحيات قبل التنفيذ.
+
+
+## 2026-10-22 05:46 (+03:00) — Manus — تطبيق Supabase للمميزات
+- المشروع الحي: `ejrojwbbflzchasvgexr`، والحالة `ACTIVE_HEALTHY`.
+- migration `features_draw_snapshot_entries_0052` طُبق بنجاح لإنشاء `public.feature_draw_snapshot_entries` ومنح runtime صلاحيات SELECT/INSERT فقط.
+- migration `features_coupon_lifecycle_outbox_0054` طُبق بنجاح لإنشاء `public.feature_notification_outbox`، trigger تحرير مخزون الجوائز، وtrigger مزامنة حالات حجز/استهلاك/تحرير الكوبون مع الطلبات.
+- التحقق الحي: `feature_draw_snapshot_entries` لديه RLS=false وruntime SELECT/INSERT=true وUPDATE=false؛ `feature_notification_outbox` لديه RLS=false وruntime SELECT/INSERT/UPDATE=true. هذا متوافق مع توجيه المستخدم بتأجيل RLS وإزالة صلاحيات anon/authenticated.
+- لم يتم تطبيق migration `0053` ولم تُنفذ أوامر RLS أو REVOKE.
+
+
+## 2026-10-22 06:14 (+03:00) — Manus — دعم قفل عامل outbox
+- طُبق migration `feature_outbox_worker_locking_0055` على مشروع Supabase الحي `ejrojwbbflzchasvgexr`.
+- أضيفت الحقول `locked_at` و`updated_at` إلى `public.feature_notification_outbox`، مع فهرس claim على الحالة والقفل وتاريخ الإنشاء.
+- تم منح `alx_api_runtime` صلاحية SELECT/UPDATE اللازمة للعامل فقط؛ لم يتم تنفيذ RLS أو إزالة صلاحيات anon/authenticated.
+- التحقق الحي أكد صلاحيات runtime للقراءة والتحديث.

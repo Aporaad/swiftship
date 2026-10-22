@@ -1,10 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { SELECT_FIELDS } from '../data/contracts/select-fields';
-import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { collection, query, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../data/legacy/legacy-compat.ts';
-import { db } from '../data/legacy/legacy-compat.ts';
-import { clearAllLocalData } from '../data/legacy/legacy-compat.ts';
-import { formatDate, formatDateTime, formatTime, now } from '../lib/dateUtils';
+import React, { useState, useEffect, useMemo } from "react";
+import { SELECT_FIELDS } from "../data/contracts/select-fields";
+import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
+import {
+  collection,
+  query,
+  onSnapshot,
+  getDocs,
+  writeBatch,
+  doc,
+  setDoc,
+} from "../data/legacy/legacy-compat.ts";
+import { db } from "../data/legacy/legacy-compat.ts";
+import { clearAllLocalData } from "../data/legacy/legacy-compat.ts";
+import { formatDate, formatDateTime, formatTime, now } from "../lib/dateUtils";
 import {
   LayoutDashboard,
   Package,
@@ -53,35 +61,42 @@ import {
   ArrowUp,
   ArrowDown,
   SlidersHorizontal,
-  X
-} from 'lucide-react';
-import { useRole } from '../hooks/useRole';
-import { useAuthSession } from '../features/auth/AuthSessionProvider';
-import { useSettings } from '../context/SettingsContext';
-import { Toaster } from 'react-hot-toast';
-import GlobalSearchModal from './GlobalSearchModal';
-import GlobalEntityLedgerModal from './GlobalEntityLedgerModal';
-import QuickNavModal from './QuickNavModal';
-import PendingPortalApprovalsModal from './PendingPortalApprovalsModal';
-import JobApplicationsModal from './JobApplicationsModal';
-import { activityLogService } from '../services/activityLogService';
-import { notificationService } from '../services/notificationService';
-import { notificationsApiDataGateway } from '../features/notifications/services/notificationsApiDataGateway';
-import { supabase } from '../data/legacy/legacy-compat.ts';
-import Header from './layout/Header';
-import Sidebar from './layout/Sidebar';
-import { MobileNavigation, NavigationCustomizer } from './layout/Navigation';
+  Trophy,
+  X,
+} from "lucide-react";
+import { useRole } from "../hooks/useRole";
+import { useAuthSession } from "../features/auth/AuthSessionProvider";
+import { useSettings } from "../context/SettingsContext";
+import { Toaster } from "react-hot-toast";
+import GlobalSearchModal from "./GlobalSearchModal";
+import GlobalEntityLedgerModal from "./GlobalEntityLedgerModal";
+import QuickNavModal from "./QuickNavModal";
+import PendingPortalApprovalsModal from "./PendingPortalApprovalsModal";
+import JobApplicationsModal from "./JobApplicationsModal";
+import { activityLogService } from "../services/activityLogService";
+import { notificationService } from "../services/notificationService";
+import { notificationsApiDataGateway } from "../features/notifications/services/notificationsApiDataGateway";
+import { supabase } from "../data/legacy/legacy-compat.ts";
+import Header from "./layout/Header";
+import Sidebar from "./layout/Sidebar";
+import { MobileNavigation, NavigationCustomizer } from "./layout/Navigation";
 
 export default function Layout() {
   const { legacyAuth: auth, signOut } = useAuthSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, profile, hasPermission, loading: roleLoading, sessionId } = useRole(true);
+  const {
+    role,
+    profile,
+    hasPermission,
+    loading: roleLoading,
+    sessionId,
+  } = useRole(true);
   const { settings, updateSettings, t } = useSettings();
-  const isAr = settings.language === 'ar';
+  const isAr = settings.language === "ar";
   // اسم النظام من القاعدة: لا أسماء تجارية ثابتة في الكود تُظهر غير ما يملكه المالك في الإعدادات.
   // The system name comes from the database — no hard-coded product name that can outshow the owner's settings.
-  const brandName = settings.systemName || settings.companyName || 'ALX';
+  const brandName = settings.systemName || settings.companyName || "ALX";
   const [isPortalApprovalsOpen, setIsPortalApprovalsOpen] = useState(false);
   const [isJobApplicationsOpen, setIsJobApplicationsOpen] = useState(false);
   const [pendingPortalCount, setPendingPortalCount] = useState(0);
@@ -91,7 +106,17 @@ export default function Layout() {
   const downloadBackup = () => {
     try {
       const backup: any = {};
-      const tables = ['users', 'orders', 'settings', 'accounts', 'account_trans', 'activity_logs', 'roles', 'sources', 'notifications'];
+      const tables = [
+        "users",
+        "orders",
+        "settings",
+        "accounts",
+        "account_trans",
+        "activity_logs",
+        "roles",
+        "sources",
+        "notifications",
+      ];
       tables.forEach(table => {
         const saved = localStorage.getItem(`swiftship_table_backup_${table}`);
         if (saved) {
@@ -99,9 +124,11 @@ export default function Layout() {
         }
       });
 
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json",
+      });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `swiftship_emergency_backup_${formatDate()}.json`;
       a.click();
@@ -116,16 +143,27 @@ export default function Layout() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = evt => {
       try {
         const parsed = JSON.parse(evt.target?.result as string);
         Object.entries(parsed).forEach(([table, data]) => {
-          localStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(data));
+          localStorage.setItem(
+            `swiftship_table_backup_${table}`,
+            JSON.stringify(data)
+          );
         });
-        alert(isAr ? 'تم استيراد واستعادة البيانات الاحتياطية بنجاح!' : 'Disaster recovery backup imported successfully!');
+        alert(
+          isAr
+            ? "تم استيراد واستعادة البيانات الاحتياطية بنجاح!"
+            : "Disaster recovery backup imported successfully!"
+        );
         window.location.reload();
       } catch (err) {
-        alert(isAr ? 'خطأ: ملف النسخة الاحتياطية غير صالح.' : 'Error: Selected backup file format is invalid.');
+        alert(
+          isAr
+            ? "خطأ: ملف النسخة الاحتياطية غير صالح."
+            : "Error: Selected backup file format is invalid."
+        );
       }
     };
     reader.readAsText(file);
@@ -135,7 +173,7 @@ export default function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try {
-      return localStorage.getItem('swiftship_sidebar_collapsed') === 'true';
+      return localStorage.getItem("swiftship_sidebar_collapsed") === "true";
     } catch (_) {
       return false;
     }
@@ -143,8 +181,8 @@ export default function Layout() {
   const [isNavCustomizerOpen, setIsNavCustomizerOpen] = useState(false);
   const [showSystemStatus, setShowSystemStatus] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('swiftship_show_system_status');
-      return saved !== null ? saved === 'true' : true;
+      const saved = localStorage.getItem("swiftship_show_system_status");
+      return saved !== null ? saved === "true" : true;
     } catch (_) {
       return true;
     }
@@ -154,14 +192,14 @@ export default function Layout() {
     setShowSystemStatus(prev => {
       const next = !prev;
       try {
-        localStorage.setItem('swiftship_show_system_status', String(next));
-      } catch (_) { }
+        localStorage.setItem("swiftship_show_system_status", String(next));
+      } catch (_) {}
       return next;
     });
   };
 
   // Global Search State
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Quick Navigation State
@@ -177,7 +215,7 @@ export default function Layout() {
     onlineStaff: 1,
     ongoingShipments: 0,
     financiallyPending: 0,
-    systemStatus: 'good' as 'good' | 'warning' | 'error'
+    systemStatus: "good" as "good" | "warning" | "error",
   });
 
   // System Time State
@@ -193,70 +231,103 @@ export default function Layout() {
   useEffect(() => {
     if (!auth.currentUser || roleLoading || !role) return;
 
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap: any) => {
-      const docs = snap.docs.map((doc: any) => doc.data());
+    const unsubOrders = onSnapshot(
+      collection(db, "orders"),
+      (snap: any) => {
+        const docs = snap.docs.map((doc: any) => doc.data());
 
-      const active = docs.filter((o: any) => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
+        const active = docs.filter(
+          (o: any) =>
+            o.orderStatus !== "تم التسليم" &&
+            o.orderStatus !== "ملغي" &&
+            o.orderStatus !== "Delivered" &&
+            o.orderStatus !== "Cancelled"
+        ).length;
 
-      const todayStr = formatDate();
-      const delayed = docs.filter((o: any) => {
-        if (o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed') {
-          return true;
+        const todayStr = formatDate();
+        const delayed = docs.filter((o: any) => {
+          if (
+            o.orderStatus === "متأخر" ||
+            o.orderStatus === "Delayed" ||
+            o.orderStatus?.toLowerCase() === "delayed"
+          ) {
+            return true;
+          }
+          const isCompleted =
+            o.orderStatus === "تم التسليم" ||
+            o.orderStatus === "Delivered" ||
+            o.orderStatus === "ملغي" ||
+            o.orderStatus === "Cancelled";
+          if (!isCompleted && Array.isArray(o.shippingDetails)) {
+            return o.shippingDetails.some(
+              (sh: any) => sh.expectedArrival && sh.expectedArrival < todayStr
+            );
+          }
+          return false;
+        }).length;
+
+        const ongoing = docs.filter((o: any) =>
+          [
+            "وصل مستودع السعودية",
+            "جاري الشحن لليمن",
+            "في التخليص الجمركي",
+            "وصل مركز التوزيع في اليمن",
+            "مع المندوب للتوصيل",
+            "في الطريق",
+            "قيد الشحن",
+            "جاري التوصيل",
+            "وصل المخزن",
+            "In Transit",
+            "In Local Warehouse",
+            "Shipped",
+            "Cargo",
+          ].includes(o.orderStatus)
+        ).length;
+
+        const unpaid = docs.filter(
+          (o: any) =>
+            o.orderStatus !== "ملغي" &&
+            o.orderStatus !== "Cancelled" &&
+            parseFloat(o.amountRemaining || 0) > 0
+        ).length;
+
+        let status: "good" | "warning" | "error" = "good";
+        if (delayed > 0) {
+          status = "error";
+        } else if (active > 0 && unpaid > active / 2) {
+          status = "warning";
         }
-        const isCompleted = o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered' || o.orderStatus === 'ملغي' || o.orderStatus === 'Cancelled';
-        if (!isCompleted && Array.isArray(o.shippingDetails)) {
-          return o.shippingDetails.some((sh: any) => sh.expectedArrival && sh.expectedArrival < todayStr);
-        }
-        return false;
-      }).length;
 
-      const ongoing = docs.filter((o: any) => [
-        'وصل مستودع السعودية',
-        'جاري الشحن لليمن',
-        'في التخليص الجمركي',
-        'وصل مركز التوزيع في اليمن',
-        'مع المندوب للتوصيل',
-        'في الطريق',
-        'قيد الشحن',
-        'جاري التوصيل',
-        'وصل المخزن',
-        'In Transit',
-        'In Local Warehouse',
-        'Shipped',
-        'Cargo'
-      ].includes(o.orderStatus)).length;
-
-      const unpaid = docs.filter((o: any) => o.orderStatus !== 'ملغي' && o.orderStatus !== 'Cancelled' && parseFloat(o.amountRemaining || 0) > 0).length;
-
-      let status: 'good' | 'warning' | 'error' = 'good';
-      if (delayed > 0) {
-        status = 'error';
-      } else if (active > 0 && unpaid > active / 2) {
-        status = 'warning';
+        setSystemStats(prev => ({
+          ...prev,
+          activeOrders: active,
+          delayedOrders: delayed,
+          ongoingShipments: ongoing,
+          financiallyPending: unpaid,
+          systemStatus: status,
+        }));
+      },
+      (error: any) => {
+        console.error("Error listening to orders for sidebar stats:", error);
       }
+    );
 
-      setSystemStats(prev => ({
-        ...prev,
-        activeOrders: active,
-        delayedOrders: delayed,
-        ongoingShipments: ongoing,
-        financiallyPending: unpaid,
-        systemStatus: status
-      }));
-    }, (error: any) => {
-      console.error("Error listening to orders for sidebar stats:", error);
-    });
-
-    const unsubSessions = onSnapshot(collection(db, 'sessions'), (snap: any) => {
-      const docs = snap.docs.map((doc: any) => doc.data() as any);
-      const activeSessionsCount = docs.filter((s: any) => s.lastSeen && (Date.now() - s.lastSeen) < 3 * 60 * 1000).length;
-      setSystemStats(prev => ({
-        ...prev,
-        onlineStaff: Math.max(1, activeSessionsCount)
-      }));
-    }, (error: any) => {
-      console.error("Error listening to sessions for sidebar stats:", error);
-    });
+    const unsubSessions = onSnapshot(
+      collection(db, "sessions"),
+      (snap: any) => {
+        const docs = snap.docs.map((doc: any) => doc.data() as any);
+        const activeSessionsCount = docs.filter(
+          (s: any) => s.lastSeen && Date.now() - s.lastSeen < 3 * 60 * 1000
+        ).length;
+        setSystemStats(prev => ({
+          ...prev,
+          onlineStaff: Math.max(1, activeSessionsCount),
+        }));
+      },
+      (error: any) => {
+        console.error("Error listening to sessions for sidebar stats:", error);
+      }
+    );
 
     return () => {
       unsubOrders();
@@ -268,22 +339,26 @@ export default function Layout() {
   useEffect(() => {
     const fetchPendingPortal = async () => {
       try {
-        const { data } = await supabase.from('portal_users').select(SELECT_FIELDS.portalUser);
+        const { data } = await supabase
+          .from("portal_users")
+          .select(SELECT_FIELDS.portalUser);
         // البوابات تُطبّع الأعمدة المسطّحة إلى camelCase أحيانًا، لذا تُقرأ الحالتان معًا.
         // Gateways sometimes normalise flat columns to camelCase, so both spellings are accepted.
         const pending = (data || []).filter((row: any) => {
           const status = row.approval_status ?? row.approvalStatus;
-          return status === 'pending_approval';
+          return status === "pending_approval";
         });
         setPendingPortalCount(pending.length);
 
-        const { data: jData } = await supabase.from('jobs_req').select(SELECT_FIELDS.jobRequest);
+        const { data: jData } = await supabase
+          .from("jobs_req")
+          .select(SELECT_FIELDS.jobRequest);
         const jPending = (jData || []).filter((row: any) => {
-          const status = row.status ?? '';
-          return !status || status === 'pending_review';
+          const status = row.status ?? "";
+          return !status || status === "pending_review";
         });
         setPendingJobsCount(jPending.length);
-      } catch (_) { }
+      } catch (_) {}
     };
 
     fetchPendingPortal();
@@ -295,19 +370,22 @@ export default function Layout() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl + K for search
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setIsSearchOpen(true);
       }
 
       // Ctrl + T or Cmd + T or Alt + T for Quick Navigation
-      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 't') || (e.altKey && e.key.toLowerCase() === 't')) {
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "t") ||
+        (e.altKey && e.key.toLowerCase() === "t")
+      ) {
         e.preventDefault();
         setIsQuickNavOpen(prev => !prev);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // عداد الإشعارات غير المقروءة من alx_api — unread badge polled from the API (no live listener).
@@ -317,29 +395,30 @@ export default function Layout() {
     let cancelled = false;
     const loadUnread = async () => {
       try {
-        const canManage = role === 'Admin' || hasPermission('manage_notifications');
+        const canManage =
+          role === "Admin" || hasPermission("manage_notifications");
         const { items } = await notificationsApiDataGateway.listNotifications({
           limit: 200,
           offset: 0,
           isRead: false,
-          scope: canManage ? 'all' : 'mine',
+          scope: canManage ? "all" : "mine",
         });
-        const isAdmin = role === 'Admin';
-        const canOrderNotif = isAdmin || hasPermission('notify_orders');
-        const canFinanceNotif = isAdmin || hasPermission('notify_finance');
-        const canSystemNotif = isAdmin || hasPermission('notify_system');
+        const isAdmin = role === "Admin";
+        const canOrderNotif = isAdmin || hasPermission("notify_orders");
+        const canFinanceNotif = isAdmin || hasPermission("notify_finance");
+        const canSystemNotif = isAdmin || hasPermission("notify_system");
         // نفس قاعدة التصنيف في صفحة الإشعارات حتى لا يختلف العداد عن المحتوى.
         // Same category rule as the notifications page so the badge matches the feed.
-        const allowed = items.filter((item) => {
-          const category = item.category || 'system';
-          if (category === 'finance') return canFinanceNotif;
-          if (category === 'order') return canOrderNotif;
-          if (category === 'system') return canSystemNotif;
+        const allowed = items.filter(item => {
+          const category = item.category || "system";
+          if (category === "finance") return canFinanceNotif;
+          if (category === "order") return canOrderNotif;
+          if (category === "system") return canSystemNotif;
           return isAdmin;
         });
         if (!cancelled) setUnreadCount(allowed.length);
       } catch (error) {
-        console.error('Error listening to notifications:', error);
+        console.error("Error listening to notifications:", error);
       }
     };
 
@@ -363,22 +442,33 @@ export default function Layout() {
       lastActivity = Date.now();
     };
 
-    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
-    activityEvents.forEach(evt => window.addEventListener(evt, updateActivity, { passive: true }));
+    const activityEvents = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "click",
+    ];
+    activityEvents.forEach(evt =>
+      window.addEventListener(evt, updateActivity, { passive: true })
+    );
 
     const checkInterval = setInterval(() => {
       const elapsed = Date.now() - lastActivity;
       if (elapsed >= timeoutMs) {
         clearInterval(checkInterval);
-        activityEvents.forEach(evt => window.removeEventListener(evt, updateActivity));
+        activityEvents.forEach(evt =>
+          window.removeEventListener(evt, updateActivity)
+        );
 
         notificationService.notify({
-          title: isAr ? 'انتهاء الجلسة' : 'Session Expired',
+          title: isAr ? "انتهاء الجلسة" : "Session Expired",
           message: isAr
-            ? 'تم تسجيل خروجك تلقائياً لعدم وجود أي نشاط خلال المدة المحددة.'
-            : 'You have been logged out automatically due to inactivity.',
-          type: 'info',
-          category: 'system'
+            ? "تم تسجيل خروجك تلقائياً لعدم وجود أي نشاط خلال المدة المحددة."
+            : "You have been logged out automatically due to inactivity.",
+          type: "info",
+          category: "system",
         });
 
         handleLogout();
@@ -387,27 +477,39 @@ export default function Layout() {
 
     return () => {
       clearInterval(checkInterval);
-      activityEvents.forEach(evt => window.removeEventListener(evt, updateActivity));
+      activityEvents.forEach(evt =>
+        window.removeEventListener(evt, updateActivity)
+      );
     };
   }, [settings.userSessionTimeout, auth.currentUser, isAr]);
 
   // Log logout & sign out
   const handleLogout = async () => {
     try {
-      await activityLogService.log('logout', 'User Session Ended');
-    } catch (_) { }
+      await activityLogService.log("logout", "User Session Ended");
+    } catch (_) {}
 
     try {
-      const activeSessId = sessionId || sessionStorage.getItem('swiftship_session_id');
-      if (activeSessId && activeSessId !== 'sess-loading' && activeSessId !== 'sess-loggedout') {
-        const { deleteDoc, doc } = await import('../data/legacy/legacy-compat.ts');
-        await deleteDoc(doc(db, 'sessions', activeSessId));
+      const activeSessId =
+        sessionId || sessionStorage.getItem("swiftship_session_id");
+      if (
+        activeSessId &&
+        activeSessId !== "sess-loading" &&
+        activeSessId !== "sess-loggedout"
+      ) {
+        const { deleteDoc, doc } =
+          await import("../data/legacy/legacy-compat.ts");
+        await deleteDoc(doc(db, "sessions", activeSessId));
       }
 
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         for (let i = sessionStorage.length - 1; i >= 0; i--) {
           const key = sessionStorage.key(i);
-          if (key && (key.startsWith('swiftship_session_id') || key.startsWith('swiftship_session_created'))) {
+          if (
+            key &&
+            (key.startsWith("swiftship_session_id") ||
+              key.startsWith("swiftship_session_created"))
+          ) {
             sessionStorage.removeItem(key);
           }
         }
@@ -420,64 +522,99 @@ export default function Layout() {
     clearAllLocalData();
 
     await signOut();
-    navigate('/login');
+    navigate("/login");
   };
 
   // Auto-backup check: if admin & autoBackupEnabled & 24h passed, run backup to PostgreSQL
   useEffect(() => {
-    if (roleLoading || role !== 'Admin' || !settings.autoBackupEnabled || !auth.currentUser) return;
+    if (
+      roleLoading ||
+      role !== "Admin" ||
+      !settings.autoBackupEnabled ||
+      !auth.currentUser
+    )
+      return;
     const lastBackupAt = settings.lastAutoBackupAt || 0;
     const hoursSince = (Date.now() - lastBackupAt) / (1000 * 60 * 60);
     if (hoursSince < 24) return;
 
     const runAutoBackup = async () => {
       try {
-        const cols = ['orders', 'customers', 'couriers', 'sources', 'users', 'roles'];
+        const cols = [
+          "orders",
+          "customers",
+          "couriers",
+          "sources",
+          "users",
+          "roles",
+        ];
         const backupDoc: any = {
-          version: '3.0',
+          version: "3.0",
           timestamp: formatDateTime(),
-          createdBy: auth.currentUser?.email || 'admin',
-          type: 'auto',
-          data: {}
+          createdBy: auth.currentUser?.email || "admin",
+          type: "auto",
+          data: {},
         };
         for (const col of cols) {
           try {
             const snap = await getDocs(collection(db, col));
-            backupDoc.data[col] = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+            backupDoc.data[col] = snap.docs.map((d: any) => ({
+              id: d.id,
+              ...d.data(),
+            }));
           } catch (colErr: any) {
-            console.warn(`[AutoBackup] Ignored error reading collection ${col}:`, colErr.message || colErr);
+            console.warn(
+              `[AutoBackup] Ignored error reading collection ${col}:`,
+              colErr.message || colErr
+            );
           }
         }
         // Save backup as a PostgreSQL document under /backups collection
         const backupId = `auto_${formatDate()}`;
         try {
-          await setDoc(doc(db, 'backups', backupId), {
+          await setDoc(doc(db, "backups", backupId), {
             ...backupDoc,
-            savedAt: Date.now()
+            savedAt: Date.now(),
           });
         } catch (setDocErr: any) {
-          console.error('[AutoBackup] setDoc to backups collection failed:', setDocErr);
+          console.error(
+            "[AutoBackup] setDoc to backups collection failed:",
+            setDocErr
+          );
           throw setDocErr;
         }
 
         // Log activity and notify users
         try {
-          activityLogService.log('backup_export', 'Auto Backup: ' + cols.join(', '));
+          activityLogService.log(
+            "backup_export",
+            "Auto Backup: " + cols.join(", ")
+          );
         } catch (actLogErr) {
-          console.warn('[AutoBackup] activityLogService failed, continuing:', actLogErr);
+          console.warn(
+            "[AutoBackup] activityLogService failed, continuing:",
+            actLogErr
+          );
         }
 
         try {
           await notificationService.notify({
-            title: settings.language === 'ar' ? 'النسخ الاحتياطي التلقائي' : 'Automatic System Backup',
-            message: settings.language === 'ar'
-              ? 'قام النظام تلقائياً بأخذ نسخة احتياطية لجميع البيانات وحفظها في قاعدة البيانات'
-              : 'The system has automatically backed up all collections to PostgreSQL',
-            type: 'success',
-            category: 'system'
+            title:
+              settings.language === "ar"
+                ? "النسخ الاحتياطي التلقائي"
+                : "Automatic System Backup",
+            message:
+              settings.language === "ar"
+                ? "قام النظام تلقائياً بأخذ نسخة احتياطية لجميع البيانات وحفظها في قاعدة البيانات"
+                : "The system has automatically backed up all collections to PostgreSQL",
+            type: "success",
+            category: "system",
           });
         } catch (notifErr: any) {
-          console.error('[AutoBackup] notificationService.notify failed:', notifErr);
+          console.error(
+            "[AutoBackup] notificationService.notify failed:",
+            notifErr
+          );
           throw notifErr;
         }
 
@@ -485,57 +622,164 @@ export default function Layout() {
         try {
           await updateSettings({
             lastAutoBackupAt: Date.now(),
-            lastBackup: formatDateTime()
+            lastBackup: formatDateTime(),
           } as any);
         } catch (updateSetErr: any) {
-          console.error('[AutoBackup] updateSettings failed:', updateSetErr);
+          console.error("[AutoBackup] updateSettings failed:", updateSetErr);
           throw updateSetErr;
         }
       } catch (err: any) {
-        console.error('[AutoBackup] General failure caught in runAutoBackup:', err.message || err);
+        console.error(
+          "[AutoBackup] General failure caught in runAutoBackup:",
+          err.message || err
+        );
       }
     };
     runAutoBackup();
-  }, [role, roleLoading, settings.autoBackupEnabled, settings.lastAutoBackupAt, auth.currentUser]);
+  }, [
+    role,
+    roleLoading,
+    settings.autoBackupEnabled,
+    settings.lastAutoBackupAt,
+    auth.currentUser,
+  ]);
 
   const toggleLanguage = () => {
-    const newLang = settings.language === 'ar' ? 'en' : 'ar';
+    const newLang = settings.language === "ar" ? "en" : "ar";
     updateSettings({ language: newLang });
   };
 
   const baseNavItems = [
-    { id: 'dashboard', name: isAr ? 'الرئيسية' : 'Dashboard', path: '/', icon: LayoutDashboard, permission: 'view_dashboard' },
-    { id: 'orders', name: isAr ? 'الطلبات والشحنات' : 'Orders & Shipments', path: '/orders', icon: Package, permission: 'view_orders' },
-    { id: 'customers', name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers' },
-    { id: 'couriers', name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers' },
-    { id: 'employees', name: isAr ? 'الموظفين' : 'Employees', path: '/employees', icon: Briefcase, permission: 'view_employees' },
-    { id: 'sources', name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
-    { id: 'finance', name: isAr ? 'القيود والسندات' : 'Entries & Vouchers', path: '/finance', icon: Wallet, permission: 'view_general_entries' },
-    { id: 'accounting', name: isAr ? 'المحاسبة' : 'Accounting', path: '/accounting', icon: BookOpen, permission: 'view_finance' },
-    { id: 'browser', name: isAr ? 'متصفح المواقع' : 'Web Browser', path: '/browser', icon: Monitor, permission: 'view_browser' },
-    { id: 'users', name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
-    { id: 'website', name: isAr ? 'إدارة الموقع' : 'Website Management', path: '/website-management', icon: Globe, permission: 'view_website_management' },
-    { id: 'notifications', name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_notifications' },
-    { id: 'reports', name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
-    { id: 'settings', name: isAr ? 'الإعدادات' : 'Settings', path: '/settings', icon: Settings, permission: 'settings' },
+    {
+      id: "dashboard",
+      name: isAr ? "الرئيسية" : "Dashboard",
+      path: "/",
+      icon: LayoutDashboard,
+      permission: "view_dashboard",
+    },
+    {
+      id: "orders",
+      name: isAr ? "الطلبات والشحنات" : "Orders & Shipments",
+      path: "/orders",
+      icon: Package,
+      permission: "view_orders",
+    },
+    {
+      id: "customers",
+      name: isAr ? "العملاء" : "Customers",
+      path: "/customers",
+      icon: Users,
+      permission: "view_customers",
+    },
+    {
+      id: "couriers",
+      name: isAr ? "المناديب" : "Couriers",
+      path: "/couriers",
+      icon: Truck,
+      permission: "view_couriers",
+    },
+    {
+      id: "employees",
+      name: isAr ? "الموظفين" : "Employees",
+      path: "/employees",
+      icon: Briefcase,
+      permission: "view_employees",
+    },
+    {
+      id: "sources",
+      name: isAr ? "المصادر" : "Sources",
+      path: "/sources",
+      icon: MapPin,
+      permission: "view_sources",
+    },
+    {
+      id: "finance",
+      name: isAr ? "القيود والسندات" : "Entries & Vouchers",
+      path: "/finance",
+      icon: Wallet,
+      permission: "view_general_entries",
+    },
+    {
+      id: "accounting",
+      name: isAr ? "المحاسبة" : "Accounting",
+      path: "/accounting",
+      icon: BookOpen,
+      permission: "view_finance",
+    },
+    {
+      id: "browser",
+      name: isAr ? "متصفح المواقع" : "Web Browser",
+      path: "/browser",
+      icon: Monitor,
+      permission: "view_browser",
+    },
+    {
+      id: "users",
+      name: isAr ? "المستخدمون والأدوار" : "Users & Roles",
+      path: "/user-management",
+      icon: UserCog,
+      permission: "view_users",
+    },
+    {
+      id: "website",
+      name: isAr ? "إدارة الموقع" : "Website Management",
+      path: "/website-management",
+      icon: Globe,
+      permission: "view_website_management",
+    },
+    {
+      id: "features",
+      name: isAr ? "المسابقات والجوائز" : "Contests & Rewards",
+      path: "/features-management",
+      icon: Trophy,
+      permission: "features.contests.read",
+    },
+    {
+      id: "notifications",
+      name: isAr ? "الإشعارات" : "Notifications",
+      path: "/notifications",
+      icon: Bell,
+      permission: "view_notifications",
+    },
+    {
+      id: "reports",
+      name: isAr ? "التقارير" : "Reports",
+      path: "/reports",
+      icon: FileText,
+      permission: "view_reports",
+    },
+    {
+      id: "settings",
+      name: isAr ? "الإعدادات" : "Settings",
+      path: "/settings",
+      icon: Settings,
+      permission: "settings",
+    },
   ];
 
-  const [navOrderConfig, setNavOrderConfig] = useState<{ path: string; visible: boolean }[]>(() => {
+  const [navOrderConfig, setNavOrderConfig] = useState<
+    { path: string; visible: boolean }[]
+  >(() => {
     try {
-      const saved = localStorage.getItem('swiftship_sidebar_nav_config');
+      const saved = localStorage.getItem("swiftship_sidebar_nav_config");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (_) { }
+    } catch (_) {}
     return baseNavItems.map(item => ({ path: item.path, visible: true }));
   });
 
-  const updateNavOrderConfig = (newConfig: { path: string; visible: boolean }[]) => {
+  const updateNavOrderConfig = (
+    newConfig: { path: string; visible: boolean }[]
+  ) => {
     setNavOrderConfig(newConfig);
     try {
-      localStorage.setItem('swiftship_sidebar_nav_config', JSON.stringify(newConfig));
-    } catch (_) { }
+      localStorage.setItem(
+        "swiftship_sidebar_nav_config",
+        JSON.stringify(newConfig)
+      );
+    } catch (_) {}
   };
 
   const moveNavItemUp = (index: number) => {
@@ -557,17 +801,22 @@ export default function Layout() {
   };
 
   const toggleNavItemVisibility = (path: string) => {
-    const updated = navOrderConfig.map(c => c.path === path ? { ...c, visible: !c.visible } : c);
+    const updated = navOrderConfig.map(c =>
+      c.path === path ? { ...c, visible: !c.visible } : c
+    );
     updateNavOrderConfig(updated);
   };
 
   const resetNavOrderConfig = () => {
-    const defaultConfig = baseNavItems.map(item => ({ path: item.path, visible: true }));
+    const defaultConfig = baseNavItems.map(item => ({
+      path: item.path,
+      visible: true,
+    }));
     updateNavOrderConfig(defaultConfig);
     setShowSystemStatus(true);
     try {
-      localStorage.setItem('swiftship_show_system_status', 'true');
-    } catch (_) { }
+      localStorage.setItem("swiftship_show_system_status", "true");
+    } catch (_) {}
   };
 
   const orderedNavItems = useMemo(() => {
@@ -587,19 +836,40 @@ export default function Layout() {
   }, [navOrderConfig, isAr]);
 
   const filteredNavItems = orderedNavItems.filter(item => {
-    if (item.path === '/website-management') {
-      return hasPermission('view_website_management') || role === 'Admin';
+    if (item.path === "/website-management") {
+      return hasPermission("view_website_management") || role === "Admin";
     }
-    if (item.path === '/browser') {
-      return hasPermission('view_browser') || role === 'Admin' || true;
+    if (item.path === "/features-management") {
+      // يظهر القسم لمن يملك أي صلاحية ميزات — والتحقق النهائي في alx_api.
+      // The section is shown to anyone with any features permission; final authz stays in alx_api.
+      return (
+        hasPermission("features.contests.read") ||
+        hasPermission("features.prizes.read") ||
+        hasPermission("features.coupons.read") ||
+        role === "Admin"
+      );
     }
-    if (item.path === '/finance') {
-      return hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody') || hasPermission('view_general_entries');
+    if (item.path === "/browser") {
+      return hasPermission("view_browser") || role === "Admin" || true;
+    }
+    if (item.path === "/finance") {
+      return (
+        hasPermission("view_finance") ||
+        hasPermission("view_expenses") ||
+        hasPermission("view_custody") ||
+        hasPermission("view_general_entries")
+      );
     }
     return hasPermission(item.permission);
   });
 
-  const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system', 'apo.1.read@gmail.com'];
+  const ROOT_EMAILS = [
+    "alsrhyarslan5@gmail.com",
+    "arslan.alshamari@gmail.com",
+    "engaporaad1@gmail.com",
+    "admin@swiftship.system",
+    "apo.1.read@gmail.com",
+  ];
   const userEmail = auth.currentUser?.email?.toLowerCase();
   const isRootAdmin = userEmail && ROOT_EMAILS.includes(userEmail);
 
@@ -615,29 +885,36 @@ export default function Layout() {
     return (
       <div className="flex bg-luxury-black text-white h-screen flex-col items-center justify-center p-8 text-center select-none">
         <ShieldCheck className="w-20 h-20 text-[#d4af37] mb-6 animate-pulse" />
-        <h1 className="text-3xl font-black mb-4 tracking-tight text-[#d4af37]">{isAr ? 'غير مصرح' : 'Unauthorized'}</h1>
+        <h1 className="text-3xl font-black mb-4 tracking-tight text-[#d4af37]">
+          {isAr ? "غير مصرح" : "Unauthorized"}
+        </h1>
         <p className="text-slate-400 max-w-md mb-8">
           {isAr
-            ? 'هذا الحساب غير مسجل في النظام حالياً. يرجى التواصل مع المدير لتفعيل حسابك.'
-            : 'This account is not currently registered in the system. Please contact the administrator to activate your account.'}
+            ? "هذا الحساب غير مسجل في النظام حالياً. يرجى التواصل مع المدير لتفعيل حسابك."
+            : "This account is not currently registered in the system. Please contact the administrator to activate your account."}
         </p>
-        <button onClick={handleLogout} className="bg-gradient-to-r from-luxury-gold to-yellow-600 hover:from-yellow-600 hover:to-luxury-gold text-black px-10 py-3.5 rounded-2xl font-black transition-all duration-300 shadow-lg shadow-yellow-950/40">
-          {t('logout')}
+        <button
+          onClick={handleLogout}
+          className="bg-gradient-to-r from-luxury-gold to-yellow-600 hover:from-yellow-600 hover:to-luxury-gold text-black px-10 py-3.5 rounded-2xl font-black transition-all duration-300 shadow-lg shadow-yellow-950/40"
+        >
+          {t("logout")}
         </button>
       </div>
     );
   }
 
-  const handleGlobalSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchText.trim()) {
+  const handleGlobalSearchKeyPress = (
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.key === "Enter" && searchText.trim()) {
       setIsSearchOpen(true);
     }
   };
 
   // Determine if a navigation item is active, accounting for query parameters
   const isItemActive = (itemPath: string) => {
-    if (itemPath.includes('?')) {
-      const [pathPart, queryPart] = itemPath.split('?');
+    if (itemPath.includes("?")) {
+      const [pathPart, queryPart] = itemPath.split("?");
       if (location.pathname !== pathPart) return false;
 
       const itemParams = new URLSearchParams(queryPart);
@@ -654,7 +931,7 @@ export default function Layout() {
       if (location.pathname === itemPath) {
         return true;
       }
-      return location.pathname.startsWith(itemPath) && itemPath !== '/';
+      return location.pathname.startsWith(itemPath) && itemPath !== "/";
     }
   };
 
@@ -673,20 +950,20 @@ export default function Layout() {
         toastOptions={{
           duration: 4500,
           style: {
-            background: '#0d0d0f',
-            color: '#fff',
-            border: '1px solid rgba(212, 175, 55, 0.2)',
-            borderRadius: '12px',
-            fontSize: '13px',
+            background: "#0d0d0f",
+            color: "#fff",
+            border: "1px solid rgba(212, 175, 55, 0.2)",
+            borderRadius: "12px",
+            fontSize: "13px",
             fontWeight: 700,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
             zIndex: 99999,
           },
           success: {
-            iconTheme: { primary: '#10b981', secondary: '#0d0d0f' },
+            iconTheme: { primary: "#10b981", secondary: "#0d0d0f" },
           },
           error: {
-            iconTheme: { primary: '#ef4444', secondary: '#0d0d0f' },
+            iconTheme: { primary: "#ef4444", secondary: "#0d0d0f" },
           },
         }}
       />
@@ -708,10 +985,8 @@ export default function Layout() {
         t={t}
       />
 
-
       {/* Main Container */}
       <main className="flex-1 flex flex-col min-w-0 h-full p-0 overflow-hidden relative">
-
         <Header
           isAr={isAr}
           isMobileMenuOpen={isMobileMenuOpen}
@@ -733,7 +1008,6 @@ export default function Layout() {
           setIsSystemDevModalOpen={setIsSystemDevModalOpen}
         />
 
-
         {/* Sub-routing Pages Outlet Viewport */}
         <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-luxury-black via-[#08080a] to-[#050505] custom-scrollbar">
           {isOfflineModeActive && (
@@ -743,13 +1017,13 @@ export default function Layout() {
                 <div className="text-start" dir={isAr ? "rtl" : "ltr"}>
                   <p className="text-xs font-bold text-amber-200">
                     {isAr
-                      ? 'وضع التشغيل الاحتياطي للطوارئ (بدون اتصال بقاعدة البيانات). جميع البيانات معروضة ومحفوظة من النسخة الاحتياطية المحلية بأمان.'
-                      : 'Emergency Offline Recovery Mode (Offline). All system actions are buffered locally via secure browser sandbox.'}
+                      ? "وضع التشغيل الاحتياطي للطوارئ (بدون اتصال بقاعدة البيانات). جميع البيانات معروضة ومحفوظة من النسخة الاحتياطية المحلية بأمان."
+                      : "Emergency Offline Recovery Mode (Offline). All system actions are buffered locally via secure browser sandbox."}
                   </p>
                   <p className="text-[10px] text-amber-500/80 mt-0.5">
                     {isAr
-                      ? 'تم الدخول بصفة المسؤول الرئيسي للصيانة وتفادي الكوارث. يمكنك تصفح البيانات وتغيير النظام وتصدير نسخة احتياطية محلية.'
-                      : 'Logged in as Main System Administrator for disaster recovery and maintenance. Browse historical indices or dump cached collections.'}
+                      ? "تم الدخول بصفة المسؤول الرئيسي للصيانة وتفادي الكوارث. يمكنك تصفح البيانات وتغيير النظام وتصدير نسخة احتياطية محلية."
+                      : "Logged in as Main System Administrator for disaster recovery and maintenance. Browse historical indices or dump cached collections."}
                   </p>
                 </div>
               </div>
@@ -757,14 +1031,18 @@ export default function Layout() {
                 <button
                   onClick={downloadBackup}
                   className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-black bg-[#d4af37] hover:bg-yellow-600 rounded-lg transition-all cursor-pointer"
-                  title={isAr ? "تنزيل نسخة احتياطية دقيقة" : "Download precision system data backup"}
+                  title={
+                    isAr
+                      ? "تنزيل نسخة احتياطية دقيقة"
+                      : "Download precision system data backup"
+                  }
                 >
                   <Download className="w-3.5 h-3.5" />
-                  {isAr ? 'تصدير نسخة احتياطية (JSON)' : 'Export Backup (JSON)'}
+                  {isAr ? "تصدير نسخة احتياطية (JSON)" : "Export Backup (JSON)"}
                 </button>
                 <label className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-amber-200 bg-amber-900/40 hover:bg-amber-900/60 border border-amber-500/35 rounded-lg transition-all cursor-pointer">
                   <Upload className="w-3.5 h-3.5" />
-                  {isAr ? 'استيراد واستعادة بيانات' : 'Import/Restore Backup'}
+                  {isAr ? "استيراد واستعادة بيانات" : "Import/Restore Backup"}
                   <input
                     type="file"
                     accept=".json"
@@ -781,8 +1059,12 @@ export default function Layout() {
         {/* Footer */}
         <footer className="h-10 border-t border-[#d4af37]/10 flex items-center px-8 justify-between text-[10px] text-slate-500 bg-black/80 backdrop-blur-md shrink-0 relative select-none">
           <div className="flex gap-4">
-            <span className="tracking-[0.1em] font-extrabold text-[#d4af37]/60">{brandName}</span>
-            <span className="border-l border-slate-800 pl-4 text-slate-600 font-mono">SEC_TOKEN: FIPS-140-3</span>
+            <span className="tracking-[0.1em] font-extrabold text-[#d4af37]/60">
+              {brandName}
+            </span>
+            <span className="border-l border-slate-800 pl-4 text-slate-600 font-mono">
+              SEC_TOKEN: FIPS-140-3
+            </span>
           </div>
           <div className="flex items-center gap-2 font-bold tracking-widest text-[#d4af37]">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -795,7 +1077,7 @@ export default function Layout() {
           isOpen={isSearchOpen}
           onClose={() => {
             setIsSearchOpen(false);
-            setSearchText('');
+            setSearchText("");
           }}
           searchQuery={searchText}
         />
@@ -811,11 +1093,14 @@ export default function Layout() {
 
         {/* System & Developer Information Modal */}
         {isSystemDevModalOpen && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsSystemDevModalOpen(false)}>
+          <div
+            className="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setIsSystemDevModalOpen(false)}
+          >
             <div
               className="w-full max-w-2xl bg-gradient-to-b from-[#0d0d0f] to-[#050507] border border-[#d4af37]/30 rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden flex flex-col max-h-[90vh]"
-              onClick={(e) => e.stopPropagation()}
-              dir={isAr ? 'rtl' : 'ltr'}
+              onClick={e => e.stopPropagation()}
+              dir={isAr ? "rtl" : "ltr"}
             >
               {/* Luxury Accent Lines */}
               <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-[#d4af37]/50 to-transparent"></div>
@@ -830,7 +1115,9 @@ export default function Layout() {
                   </div>
                   <div className="text-start">
                     <h3 className="text-lg font-black text-white tracking-tight leading-none">
-                      {isAr ? 'مركز معلومات النظام والمطور' : 'System Intelligence Hub'}
+                      {isAr
+                        ? "مركز معلومات النظام والمطور"
+                        : "System Intelligence Hub"}
                     </h3>
                     <p className="text-[10px] text-[#d4af37] font-black uppercase tracking-[0.2em] mt-1.5">
                       Enterprise Enterprise V4 • Global Edition
@@ -847,13 +1134,12 @@ export default function Layout() {
 
               {/* Modal Content - Scrollable Area */}
               <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-
                 {/* 1. System Overview Section */}
                 <section className="space-y-4">
                   <div className="flex items-center gap-2 text-[#d4af37]">
                     <Cpu className="w-4 h-4" />
                     <span className="text-[11px] font-black uppercase tracking-[0.2em]">
-                      {isAr ? 'نظرة عامة على النظام' : 'System Overview'}
+                      {isAr ? "نظرة عامة على النظام" : "System Overview"}
                     </span>
                   </div>
                   <div className="bg-[#0a0a0c] border border-white/[0.03] p-6 rounded-3xl relative overflow-hidden group">
@@ -862,7 +1148,9 @@ export default function Layout() {
                     </div>
                     <h4 className="text-sm font-black text-white mb-3 flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
-                      {isAr ? `${brandName} — بنية لوجستية معيارية` : `${brandName} — Logistics Infrastructure`}
+                      {isAr
+                        ? `${brandName} — بنية لوجستية معيارية`
+                        : `${brandName} — Logistics Infrastructure`}
                     </h4>
                     <p className="text-xs text-slate-400 font-bold leading-relaxed text-start">
                       {isAr
@@ -885,7 +1173,7 @@ export default function Layout() {
                   <div className="flex items-center gap-2 text-[#d4af37]">
                     <Building2 className="w-4 h-4" />
                     <span className="text-[11px] font-black uppercase tracking-[0.2em]">
-                      {isAr ? 'نبذة عن الشركة' : 'Company Overview'}
+                      {isAr ? "نبذة عن الشركة" : "Company Overview"}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -895,26 +1183,47 @@ export default function Layout() {
                       </h5>
                       <p className="text-[11px] text-slate-500 font-bold leading-relaxed">
                         {isAr
-                          ? 'شركة رائدة في تقديم الحلول اللوجستية المتكاملة وخدمات النقل الذكي، نعتمد على الابتكار التقني لرفع كفاءة سلاسل التوريد في المنطقة.'
-                          : 'A leading provider of integrated logistics solutions and smart transportation services, leveraging technical innovation to enhance supply chain efficiency.'}
+                          ? "شركة رائدة في تقديم الحلول اللوجستية المتكاملة وخدمات النقل الذكي، نعتمد على الابتكار التقني لرفع كفاءة سلاسل التوريد في المنطقة."
+                          : "A leading provider of integrated logistics solutions and smart transportation services, leveraging technical innovation to enhance supply chain efficiency."}
                       </p>
                     </div>
                     <div className="bg-[#0a0a0c] border border-white/[0.03] p-5 rounded-3xl space-y-3 text-start">
                       {[
-                        { value: settings.companyAddress, Icon: MapPin, ltr: false },
-                        { value: settings.companyPhone, Icon: Phone, ltr: true },
-                        { value: settings.companyWebsite, Icon: Globe, ltr: true },
-                      ].filter(row => row.value).map(({ value, Icon, ltr }) => (
-                        <div key={value} className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                          <Icon className="w-3.5 h-3.5 text-[#d4af37]" />
-                          <span dir={ltr ? 'ltr' : undefined}>{value}</span>
-                        </div>
-                      ))}
-                      {!settings.companyAddress && !settings.companyPhone && !settings.companyWebsite && (
-                        <span className="text-[10px] font-bold text-slate-600">
-                          {isAr ? 'لم تُسجَّل بيانات الشركة بعد — تُضاف من الإعدادات العامة' : 'No company contact data yet — add it in General Settings'}
-                        </span>
-                      )}
+                        {
+                          value: settings.companyAddress,
+                          Icon: MapPin,
+                          ltr: false,
+                        },
+                        {
+                          value: settings.companyPhone,
+                          Icon: Phone,
+                          ltr: true,
+                        },
+                        {
+                          value: settings.companyWebsite,
+                          Icon: Globe,
+                          ltr: true,
+                        },
+                      ]
+                        .filter(row => row.value)
+                        .map(({ value, Icon, ltr }) => (
+                          <div
+                            key={value}
+                            className="flex items-center gap-2 text-[10px] font-bold text-slate-400"
+                          >
+                            <Icon className="w-3.5 h-3.5 text-[#d4af37]" />
+                            <span dir={ltr ? "ltr" : undefined}>{value}</span>
+                          </div>
+                        ))}
+                      {!settings.companyAddress &&
+                        !settings.companyPhone &&
+                        !settings.companyWebsite && (
+                          <span className="text-[10px] font-bold text-slate-600">
+                            {isAr
+                              ? "لم تُسجَّل بيانات الشركة بعد — تُضاف من الإعدادات العامة"
+                              : "No company contact data yet — add it in General Settings"}
+                          </span>
+                        )}
                     </div>
                   </div>
                 </section>
@@ -924,7 +1233,7 @@ export default function Layout() {
                   <div className="flex items-center gap-2 text-[#d4af37]">
                     <Code2 className="w-4 h-4" />
                     <span className="text-[11px] font-black uppercase tracking-[0.2em]">
-                      {isAr ? 'المطور والدعم الفني' : 'Dev & Tech Support'}
+                      {isAr ? "المطور والدعم الفني" : "Dev & Tech Support"}
                     </span>
                   </div>
                   <div className="bg-gradient-to-br from-[#0a0a0c] to-[#0d0d10] border border-[#d4af37]/10 p-6 rounded-3xl relative group">
@@ -933,23 +1242,27 @@ export default function Layout() {
                         <div className="w-full h-full rounded-2xl bg-black flex items-center justify-center overflow-hidden">
                           <User className="w-10 h-10 text-[#d4af37]/20" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                          <span className="absolute bottom-2 inset-x-0 text-center text-[9px] font-black text-[#d4af37] uppercase">Lead</span>
+                          <span className="absolute bottom-2 inset-x-0 text-center text-[9px] font-black text-[#d4af37] uppercase">
+                            Lead
+                          </span>
                         </div>
                       </div>
                       <div className="flex-1 space-y-1">
                         <h4 className="text-lg font-black text-white flex items-center gap-2">
-                          {isAr ? 'أرسلان الشماري' : 'Arslan ALShamari'}
+                          {isAr ? "أرسلان الشماري" : "Arslan ALShamari"}
                           <div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md text-[8px] font-black uppercase">
                             Available for Support
                           </div>
                         </h4>
                         <p className="text-xs text-[#d4af37] font-black uppercase tracking-wide">
-                          {isAr ? 'كبير مهندسي البرمجيات وأمن المعلومات' : 'Senior Software Architect & InfoSec Specialist'}
+                          {isAr
+                            ? "كبير مهندسي البرمجيات وأمن المعلومات"
+                            : "Senior Software Architect & InfoSec Specialist"}
                         </p>
                         <p className="text-[11px] text-slate-500 font-bold max-w-md">
                           {isAr
-                            ? 'لطلب الدعم الفني المباشر، الاستشارات التقنية، أو طلب تعديلات وتطويرات مخصصة للنظام، يرجى استخدام وسائل التواصل الرسمية أدناه.'
-                            : 'For direct technical support, technical consultations, or custom system modifications and developments, please use the official contact methods below.'}
+                            ? "لطلب الدعم الفني المباشر، الاستشارات التقنية، أو طلب تعديلات وتطويرات مخصصة للنظام، يرجى استخدام وسائل التواصل الرسمية أدناه."
+                            : "For direct technical support, technical consultations, or custom system modifications and developments, please use the official contact methods below."}
                         </p>
                       </div>
                     </div>
@@ -964,9 +1277,16 @@ export default function Layout() {
                             <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center border border-slate-800 group-hover/link:border-[#d4af37]/40 transition-colors">
                               <Phone className="w-3.5 h-3.5 text-slate-500 group-hover/link:text-[#d4af37] transition-colors" />
                             </div>
-                            <span className="text-[10px] font-bold text-slate-400 group-hover/link:text-slate-300 transition-colors">{isAr ? 'اتصال مباشر' : 'Direct Call'}</span>
+                            <span className="text-[10px] font-bold text-slate-400 group-hover/link:text-slate-300 transition-colors">
+                              {isAr ? "اتصال مباشر" : "Direct Call"}
+                            </span>
                           </div>
-                          <span dir="ltr" className="text-xs font-mono font-black text-white group-hover/link:text-[#d4af37] transition-colors">+967 776 422 777</span>
+                          <span
+                            dir="ltr"
+                            className="text-xs font-mono font-black text-white group-hover/link:text-[#d4af37] transition-colors"
+                          >
+                            +967 776 422 777
+                          </span>
                         </a>
                         <a
                           href="mailto:arslan.alshamari@gmail.com"
@@ -978,9 +1298,13 @@ export default function Layout() {
                             <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center border border-slate-800 group-hover/link:border-[#d4af37]/40 transition-colors">
                               <Mail className="w-3.5 h-3.5 text-slate-500 group-hover/link:text-[#d4af37] transition-colors" />
                             </div>
-                            <span className="text-[10px] font-bold text-slate-400 group-hover/link:text-slate-300 transition-colors">{isAr ? 'البريد الرسمي' : 'Official Email'}</span>
+                            <span className="text-[10px] font-bold text-slate-400 group-hover/link:text-slate-300 transition-colors">
+                              {isAr ? "البريد الرسمي" : "Official Email"}
+                            </span>
                           </div>
-                          <span className="text-[10px] font-black text-white group-hover/link:text-[#d4af37] transition-colors">arslan.alshamari@gmail.com</span>
+                          <span className="text-[10px] font-black text-white group-hover/link:text-[#d4af37] transition-colors">
+                            arslan.alshamari@gmail.com
+                          </span>
                         </a>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
@@ -991,7 +1315,9 @@ export default function Layout() {
                           className="flex flex-col items-center justify-center gap-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/20 hover:border-emerald-500/30 rounded-2xl transition-all p-4 group/btn cursor-pointer shadow-sm active:scale-95 relative z-10"
                         >
                           <MessageCircle className="w-6 h-6 text-emerald-400 group-hover/btn:scale-110 transition-transform shadow-emerald-500/20" />
-                          <span className="text-[9px] font-black uppercase text-emerald-400 tracking-wider">WhatsApp</span>
+                          <span className="text-[9px] font-black uppercase text-emerald-400 tracking-wider">
+                            WhatsApp
+                          </span>
                         </a>
                         <a
                           href="https://t.me/Arslan_ALShamari"
@@ -1000,7 +1326,9 @@ export default function Layout() {
                           className="flex flex-col items-center justify-center gap-2 bg-sky-500/5 border border-sky-500/10 hover:bg-sky-500/20 hover:border-sky-500/30 rounded-2xl transition-all p-4 group/btn cursor-pointer shadow-sm active:scale-95 relative z-10"
                         >
                           <Send className="w-6 h-6 text-sky-400 group-hover/btn:scale-110 transition-transform shadow-sky-500/20" />
-                          <span className="text-[9px] font-black uppercase text-sky-400 tracking-wider">Telegram</span>
+                          <span className="text-[9px] font-black uppercase text-sky-400 tracking-wider">
+                            Telegram
+                          </span>
                         </a>
                       </div>
                     </div>
@@ -1019,9 +1347,13 @@ export default function Layout() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-black text-white/20 tracking-[0.3em]">AES-256</span>
+                  <span className="text-[10px] font-black text-white/20 tracking-[0.3em]">
+                    AES-256
+                  </span>
                   <div className="h-3 w-[1px] bg-white/10"></div>
-                  <span className="text-[10px] font-black text-[#d4af37]/40 tracking-[0.2em]">ALX-V4-2026</span>
+                  <span className="text-[10px] font-black text-[#d4af37]/40 tracking-[0.2em]">
+                    ALX-V4-2026
+                  </span>
                 </div>
               </div>
             </div>
@@ -1050,7 +1382,6 @@ export default function Layout() {
         toggleNavItemVisibility={toggleNavItemVisibility}
         resetNavOrderConfig={resetNavOrderConfig}
       />
-
 
       {/* Pending Portal Approvals Modal */}
       <PendingPortalApprovalsModal

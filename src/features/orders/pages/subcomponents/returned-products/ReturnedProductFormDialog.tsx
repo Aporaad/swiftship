@@ -7,6 +7,7 @@ import { FieldLabel } from './helpers';
 import { RETURN_INPUT_CLASS_NAME } from './constants';
 import { CurrencySelect, toCurrencySelectOptions } from '../../../../../components/common/CurrencySelect';
 import { useExchangeRates } from '../../../../../hooks/useExchangeRates';
+import { DatePickerInput } from '../../../../../components/common/DatePickerInput';
 
 type ReturnFormData = {
   order_id?: string;
@@ -414,11 +415,10 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                         </select>
                       </FieldLabel>
                       <FieldLabel label={isAr ? 'تاريخ الإرجاع' : 'Return Date'}>
-                        <input
+                        <DatePickerInput
                           type="date"
                           value={formData.returned_at ? String(formData.returned_at).split('T')[0] : ''}
-                          onChange={e => setFormData((f) => ({ ...f, returned_at: e.target.value }))}
-                          className={inp}
+                          onChange={val => setFormData((f) => ({ ...f, returned_at: val }))}
                         />
                       </FieldLabel>
                     </div>

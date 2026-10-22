@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CurrencySelect, toCurrencySelectOptions } from './common/CurrencySelect';
+import { DatePickerInput } from './common/DatePickerInput';
 import {
   Truck, Search, Wrench, X, PlusCircle, Trash2, Calendar, DollarSign,
   Activity, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, User, ClipboardList, Package, Printer
@@ -1006,12 +1007,11 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
 
                 <div>
                   <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'تاريخ الاقتناء' : 'Acquisition Date'}</label>
-                  <input
+                  <DatePickerInput
                     type="date"
                     required
                     value={newAsset.purchaseDate}
-                    onChange={e => setNewAsset(prev => ({ ...prev, purchaseDate: e.target.value }))}
-                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-bold outline-none cursor-pointer focus:border-[#d4af37]"
+                    onChange={val => setNewAsset(prev => ({ ...prev, purchaseDate: val }))}
                   />
                 </div>
               </div>
@@ -1164,12 +1164,11 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
               {/* Date */}
               <div>
                 <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'تاريخ صيانة التقرير' : 'Check Date'}</label>
-                <input
+                <DatePickerInput
                   type="date"
                   required
                   value={newMaint.date}
-                  onChange={e => setNewMaint(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-bold outline-none cursor-pointer focus:border-[#d4af37]"
+                  onChange={val => setNewMaint(prev => ({ ...prev, date: val }))}
                 />
               </div>
 

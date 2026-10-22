@@ -3,34 +3,35 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthSession } from './features/auth/AuthSessionProvider';
-import Layout from './components/Layout';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Orders from './pages/Orders';
-import Tracking from './pages/Tracking';
-import Customers from './pages/Customers';
-import Users from './pages/Users';
-import UserManagement from './pages/UserManagement';
-import Couriers from './pages/Couriers';
-import Roles from './pages/Roles';
-import Sources from './pages/Sources';
-import Settings from './pages/Settings';
-import Notifications from './pages/Notifications';
-import FinanceEntries from './pages/FinanceEntries';
-import Accounting from './pages/Accounting';
-import Reports from './pages/Reports';
-import SalaryHistory from './pages/SalaryHistory';
-import Employees from './pages/Employees';
-import WebsiteManagement from './pages/WebsiteManagement';
-import BrowserViewer from './pages/BrowserViewer';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuthSession } from "./features/auth/AuthSessionProvider";
+import Layout from "./components/Layout";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Orders from "./pages/Orders";
+import Tracking from "./pages/Tracking";
+import Customers from "./pages/Customers";
+import Users from "./pages/Users";
+import UserManagement from "./pages/UserManagement";
+import Couriers from "./pages/Couriers";
+import Roles from "./pages/Roles";
+import Sources from "./pages/Sources";
+import Settings from "./pages/Settings";
+import Notifications from "./pages/Notifications";
+import FinanceEntries from "./pages/FinanceEntries";
+import Accounting from "./pages/Accounting";
+import Reports from "./pages/Reports";
+import SalaryHistory from "./pages/SalaryHistory";
+import Employees from "./pages/Employees";
+import WebsiteManagement from "./pages/WebsiteManagement";
+import FeaturesManagement from "./pages/FeaturesManagement";
+import BrowserViewer from "./pages/BrowserViewer";
 
-import { SettingsProvider } from './context/SettingsContext';
+import { SettingsProvider } from "./context/SettingsContext";
 
 export default function App() {
   const { state, user } = useAuthSession();
-  const loading = state.status === 'loading';
+  const loading = state.status === "loading";
 
   if (loading) {
     return (
@@ -80,13 +81,16 @@ export default function App() {
         </div>
 
         {/* CSS custom keyframes for the progress bar directly injected */}
-        <style dangerouslySetInnerHTML={{
-          __html: `
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
           @keyframes loading-bar {
             0% { transform: translateX(-100%); }
             100% { transform: translateX(200%); }
           }
-        `}} />
+        `,
+          }}
+        />
       </div>
     );
   }
@@ -96,12 +100,21 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           {!user && <Route path="/tracking" element={<Tracking />} />}
-          <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+          <Route
+            path="/login"
+            element={!user ? <Login /> : <Navigate to="/" />}
+          />
 
-          <Route path="/" element={user ? <Layout /> : <Navigate to="/login" />}>
+          <Route
+            path="/"
+            element={user ? <Layout /> : <Navigate to="/login" />}
+          >
             <Route index element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />
-            <Route path="tracking" element={<Navigate to="/orders?tab=tracking" replace />} />
+            <Route
+              path="tracking"
+              element={<Navigate to="/orders?tab=tracking" replace />}
+            />
             <Route path="customers" element={<Customers />} />
             <Route path="sources" element={<Sources />} />
             <Route path="users" element={<Users />} />
@@ -109,7 +122,10 @@ export default function App() {
             <Route path="employees" element={<Employees />} />
             <Route path="couriers" element={<Couriers />} />
             <Route path="finance" element={<FinanceEntries />} />
-            <Route path="expenses" element={<Navigate to="/finance" replace />} />
+            <Route
+              path="expenses"
+              element={<Navigate to="/finance" replace />}
+            />
             <Route path="accounting" element={<Accounting />} />
             <Route path="reports" element={<Reports />} />
             <Route path="roles" element={<Roles />} />
@@ -117,6 +133,10 @@ export default function App() {
             <Route path="notifications" element={<Notifications />} />
             <Route path="salary-history" element={<SalaryHistory />} />
             <Route path="website-management" element={<WebsiteManagement />} />
+            <Route
+              path="features-management"
+              element={<FeaturesManagement />}
+            />
             <Route path="browser" element={<BrowserViewer />} />
           </Route>
         </Routes>

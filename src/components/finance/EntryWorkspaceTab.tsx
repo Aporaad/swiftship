@@ -34,6 +34,7 @@ import {
 import { financialEntryService, type FinancialEntryCategory } from '../../services/financialEntryService';
 import { currencyOptionLabel, toCurrencySelectOptions } from '../common/CurrencySelect';
 import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
+import { DatePickerInput } from '../common/DatePickerInput';
 
 import GeneralEntryForm from './forms/GeneralEntryForm';
 import CompoundEntryForm from './forms/CompoundEntryForm';
@@ -678,12 +679,12 @@ export default function EntryWorkspaceTab({
             {/* التاريخ من — Date From */}
             <div>
               <div className="mb-1 text-[10px] font-bold text-slate-500">من تاريخ</div>
-              <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white focus:outline-none" />
+              <DatePickerInput type="date" value={filterDateFrom} onChange={setFilterDateFrom} placeholder="من تاريخ" />
             </div>
             {/* التاريخ إلى — Date To */}
             <div>
               <div className="mb-1 text-[10px] font-bold text-slate-500">إلى تاريخ</div>
-              <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white focus:outline-none" />
+              <DatePickerInput type="date" value={filterDateTo} onChange={setFilterDateTo} placeholder="إلى تاريخ" />
             </div>
             {/* نطاق المبلغ — Amount Range */}
             <div className="flex gap-2 items-end">

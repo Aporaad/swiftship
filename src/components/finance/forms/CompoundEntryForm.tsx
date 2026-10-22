@@ -12,6 +12,7 @@ import { toDateInputValue, toDateTimeInputValue } from '../../../lib/dateUtils';
 import { useEffect, useMemo, useState } from 'react';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../shared/contracts/finance.contracts';
 import { AlertTriangle, Plus, Save, Trash2, ArrowRight, ArrowLeft, Calendar, User, Calculator } from 'lucide-react';
+import { DatePickerInput } from '../../common/DatePickerInput';
 import {
   financialEntryService,
   type FinancialEntryInput,
@@ -380,13 +381,13 @@ export default function CompoundEntryForm({
             <Calendar className="h-3.5 w-3.5 text-cyan-400" />
             <span>تاريخ ووقت القيد</span>
           </label>
-          <input
-            required
-            type="datetime-local"
-            value={effectiveAt}
-            onChange={(e) => setEffectiveAt(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold text-cyan-200 transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
-          />
+          <div className="mt-1.5">
+            <DatePickerInput
+              type="datetime-local"
+              value={effectiveAt}
+              onChange={setEffectiveAt}
+            />
+          </div>
         </div>
 
         <div>

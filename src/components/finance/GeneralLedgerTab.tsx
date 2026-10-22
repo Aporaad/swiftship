@@ -1,6 +1,7 @@
 import React from 'react';
 import { Edit2, Eye, FileSpreadsheet, PlusCircle, Printer, Search, Trash2 } from 'lucide-react';
 import { CurrencySelect, toCurrencySelectOptions } from '../common/CurrencySelect';
+import { DatePickerInput } from '../common/DatePickerInput';
 import type {
   LedgerCurrencyFilter,
   LedgerDateFilter,
@@ -197,20 +198,20 @@ export default function GeneralLedgerTab({
               <div className="grid grid-cols-2 gap-3 bg-black/35 p-3 rounded-2xl border border-dashed border-slate-850 animate-fade-in max-w-xl">
                 <div>
                   <label className="block text-[9px] text-slate-550 mb-1">{isAr ? 'من تاريخ:' : 'Starting date:'}</label>
-                  <input
+                  <DatePickerInput
                     type="date"
                     value={customStartDate}
-                    onChange={e => setCustomStartDate(e.target.value)}
-                    className="bg-black/50 border border-slate-850 text-white rounded-lg p-1.5 text-xs font-bold w-full outline-none focus:border-[#d4af37]"
+                    onChange={setCustomStartDate}
+                    placeholder={isAr ? 'اختر تاريخ البدء' : 'Start date'}
                   />
                 </div>
                 <div>
                   <label className="block text-[9px] text-slate-550 mb-1">{isAr ? 'إلى تاريخ:' : 'Ending date:'}</label>
-                  <input
+                  <DatePickerInput
                     type="date"
                     value={customEndDate}
-                    onChange={e => setCustomEndDate(e.target.value)}
-                    className="bg-black/50 border border-slate-850 text-white rounded-lg p-1.5 text-xs font-bold w-full outline-none focus:border-[#d4af37]"
+                    onChange={setCustomEndDate}
+                    placeholder={isAr ? 'اختر تاريخ النهاية' : 'End date'}
                   />
                 </div>
               </div>

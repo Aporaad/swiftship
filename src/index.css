@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
+
   --color-gold-50: #fbfcf4;
   --color-gold-100: #faf7dd;
   --color-gold-200: #f4eaaf;
@@ -16,7 +16,7 @@
   --color-gold-800: #6b4414;
   --color-gold-900: #51310f;
   --color-gold-950: #331c07;
-  
+
   --color-luxury-gold: #d4af37;
   --color-luxury-gold-light: #f3e5ab;
   --color-luxury-black: #050505;
@@ -35,7 +35,22 @@
   }
 
   /* Force elements to be selectable for effortless copying */
-  p, span, h1, h2, h3, h4, h5, h6, td, th, input, textarea, code, pre, label, .selectable-text {
+  p,
+  span,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  td,
+  th,
+  input,
+  textarea,
+  code,
+  pre,
+  label,
+  .selectable-text {
     user-select: text !important;
     -webkit-user-select: text !important;
   }
@@ -56,47 +71,97 @@
 }
 
 /* Backgrounds */
-.light-mode .bg-luxury-black { background-color: #f0f2f5 !important; }
-.light-mode .bg-black\/40 { background-color: rgba(255,255,255,0.9) !important; }
-.light-mode .bg-black\/50 { background-color: rgba(255,255,255,0.95) !important; }
-.light-mode .bg-black\/60 { background-color: rgba(255,255,255,0.97) !important; }
-.light-mode .bg-black\/30 { background-color: rgba(255,255,255,0.8) !important; }
-.light-mode .bg-black\/80 { background-color: rgba(255,255,255,1) !important; }
-.light-mode .bg-\[\#0e0e11\] { background-color: #f0f2f5 !important; }
-.light-mode .bg-\[\#121215\] { background-color: #ffffff !important; }
-.light-mode .bg-\[\#08080a\] { background-color: #eef0f3 !important; }
-.light-mode .bg-\[\#07070a\] { background-color: #eef0f3 !important; }
-.light-mode .bg-\[\#050505\] { background-color: #f0f2f5 !important; }
-.light-mode .bg-slate-950 { background-color: #f8f9fa !important; }
-.light-mode .bg-slate-900\/40 { background-color: rgba(240,242,245,0.7) !important; }
-.light-mode .bg-slate-900\/30 { background-color: rgba(240,242,245,0.6) !important; }
-.light-mode .bg-slate-950\/20 { background-color: rgba(240,242,245,0.5) !important; }
+.light-mode .bg-luxury-black {
+  background-color: #f0f2f5 !important;
+}
+.light-mode .bg-black\/40 {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+.light-mode .bg-black\/50 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+.light-mode .bg-black\/60 {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+}
+.light-mode .bg-black\/30 {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+}
+.light-mode .bg-black\/80 {
+  background-color: rgba(255, 255, 255, 1) !important;
+}
+.light-mode .bg-\[\#0e0e11\] {
+  background-color: #f0f2f5 !important;
+}
+.light-mode .bg-\[\#121215\] {
+  background-color: #ffffff !important;
+}
+.light-mode .bg-\[\#08080a\] {
+  background-color: #eef0f3 !important;
+}
+.light-mode .bg-\[\#07070a\] {
+  background-color: #eef0f3 !important;
+}
+.light-mode .bg-\[\#050505\] {
+  background-color: #f0f2f5 !important;
+}
+.light-mode .bg-slate-950 {
+  background-color: #f8f9fa !important;
+}
+.light-mode .bg-slate-900\/40 {
+  background-color: rgba(240, 242, 245, 0.7) !important;
+}
+.light-mode .bg-slate-900\/30 {
+  background-color: rgba(240, 242, 245, 0.6) !important;
+}
+.light-mode .bg-slate-950\/20 {
+  background-color: rgba(240, 242, 245, 0.5) !important;
+}
 
 /* Sidebar */
-.light-mode aside { 
-  background-color: #ffffff !important; 
-  border-color: rgba(212,175,55,0.2) !important;
+.light-mode aside {
+  background-color: #ffffff !important;
+  border-color: rgba(212, 175, 55, 0.2) !important;
 }
-.light-mode aside .bg-\[\#08080a\] { background-color: #f8f9fa !important; }
-.light-mode footer { background-color: #f0f2f5 !important; }
+.light-mode aside .bg-\[\#08080a\] {
+  background-color: #f8f9fa !important;
+}
+.light-mode footer {
+  background-color: #f0f2f5 !important;
+}
 
 /* Top navbar */
-.light-mode header { 
-  background-color: rgba(255,255,255,0.97) !important;
-  border-color: rgba(212,175,55,0.15) !important;
+.light-mode header {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+  border-color: rgba(212, 175, 55, 0.15) !important;
 }
 
 /* Text Colors */
-.light-mode .text-white { color: #1a1a2e !important; }
-.light-mode .text-slate-300 { color: #374151 !important; }
-.light-mode .text-slate-400 { color: #4b5563 !important; }
-.light-mode .text-slate-500 { color: #6b7280 !important; }
-.light-mode .text-slate-600 { color: #374151 !important; }
+.light-mode .text-white {
+  color: #1a1a2e !important;
+}
+.light-mode .text-slate-300 {
+  color: #374151 !important;
+}
+.light-mode .text-slate-400 {
+  color: #4b5563 !important;
+}
+.light-mode .text-slate-500 {
+  color: #6b7280 !important;
+}
+.light-mode .text-slate-600 {
+  color: #374151 !important;
+}
 
 /* Borders */
-.light-mode .border-slate-850 { border-color: #e5e7eb !important; }
-.light-mode .border-slate-800 { border-color: #d1d5db !important; }
-.light-mode .border-slate-900 { border-color: #e5e7eb !important; }
+.light-mode .border-slate-850 {
+  border-color: #e5e7eb !important;
+}
+.light-mode .border-slate-800 {
+  border-color: #d1d5db !important;
+}
+.light-mode .border-slate-900 {
+  border-color: #e5e7eb !important;
+}
 
 /* Inputs in light mode */
 .light-mode input:not([type="checkbox"]):not([type="radio"]),
@@ -117,7 +182,7 @@
 .light-mode section.bg-\[\#121215\] {
   background-color: #ffffff !important;
   border-color: #e5e7eb !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 /* Main scrollable content */
@@ -126,27 +191,44 @@
 }
 
 /* Scrollbar in light mode */
-.light-mode ::-webkit-scrollbar-track { background: #f0f2f5; }
-.light-mode ::-webkit-scrollbar-thumb { background: #d1d5db; }
-.light-mode ::-webkit-scrollbar-thumb:hover { background: #d4af37; }
+.light-mode ::-webkit-scrollbar-track {
+  background: #f0f2f5;
+}
+.light-mode ::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+.light-mode ::-webkit-scrollbar-thumb:hover {
+  background: #d4af37;
+}
 
 /* ─────────────────────────────────────── */
 /* CUSTOM SCROLLBAR (DEFAULT DARK)        */
 /* ─────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #050505; }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #050505;
+}
 ::-webkit-scrollbar-thumb {
   background: #1b1b1f;
   border-radius: 9999px;
   border: 1px solid #050505;
 }
-::-webkit-scrollbar-thumb:hover { background: #d4af37; }
+::-webkit-scrollbar-thumb:hover {
+  background: #d4af37;
+}
 
 /* ─────────────────────────────────────── */
 /* LUXURY GLOW / GLASS UTILITIES          */
 /* ─────────────────────────────────────── */
-.luxury-glow-gold { box-shadow: 0 0 20px rgba(212, 175, 55, 0.15); }
-.luxury-glow-neon { text-shadow: 0 0 8px rgba(212, 175, 55, 0.4); }
+.luxury-glow-gold {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
+}
+.luxury-glow-neon {
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+}
 .glass-panel {
   background: rgba(13, 13, 15, 0.7);
   backdrop-filter: blur(12px);
@@ -162,13 +244,30 @@
 /* SETTINGS TABS ANIMATIONS               */
 /* ─────────────────────────────────────── */
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.animate-fade-slide-in { animation: fadeSlideIn 0.25s ease both; }
+.animate-fade-slide-in {
+  animation: fadeSlideIn 0.25s ease both;
+}
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.animate-fade-in { animation: fadeIn 0.2s ease both; }
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade-in {
+  animation: fadeIn 0.2s ease both;
+}
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -176,16 +275,16 @@
 /* AUTOFILL FIXES FOR DARK/LIGHT MODE     */
 /* ─────────────────────────────────────── */
 input:-webkit-autofill,
-input:-webkit-autofill:hover, 
-input:-webkit-autofill:focus, 
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
   -webkit-text-fill-color: white !important;
   transition: background-color 5000s ease-in-out 0s;
 }
 
 .light-mode input:-webkit-autofill,
-.light-mode input:-webkit-autofill:hover, 
-.light-mode input:-webkit-autofill:focus, 
+.light-mode input:-webkit-autofill:hover,
+.light-mode input:-webkit-autofill:focus,
 .light-mode input:-webkit-autofill:active {
   -webkit-text-fill-color: #111827 !important;
 }
@@ -195,11 +294,23 @@ input:-webkit-autofill:active {
 /* ─────────────────────────────────────── */
 @media print {
   /* Hide everything by default */
-  html, body, #root, header, aside, footer, nav, button, .no-print, .modal-backdrop, .fixed, .absolute, dialog {
+  html,
+  body,
+  #root,
+  header,
+  aside,
+  footer,
+  nav,
+  button,
+  .no-print,
+  .modal-backdrop,
+  .fixed,
+  .absolute,
+  dialog {
     display: none !important;
     visibility: hidden !important;
   }
-  
+
   /* Reset body wrapper to receive clean printing canvas only */
   body {
     background: #ffffff !important;
@@ -216,7 +327,8 @@ input:-webkit-autofill:active {
   }
 
   /* Isolate print-invoice-canvas and force it to be visible */
-  #print-invoice-canvas, #print-invoice-canvas * {
+  #print-invoice-canvas,
+  #print-invoice-canvas * {
     display: block !important;
     visibility: visible !important;
   }
@@ -257,7 +369,8 @@ input:-webkit-autofill:active {
     display: table-footer-group !important;
   }
 
-  th, td {
+  th,
+  td {
     border: 1px solid #bcbcbc !important;
     padding: 8px 10px !important;
     text-align: inherit !important;
@@ -268,5 +381,613 @@ input:-webkit-autofill:active {
   @page {
     margin: 8mm 10mm;
     size: auto;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* DATE PICKER INPUT (dpi-*) — مكون اختيار التاريخ والوقت المخصص             */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── الحاوية الخارجية ─────────────────────────────────────────────────────── */
+.dpi-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* ─── صندوق الإدخال ───────────────────────────────────────────────────────── */
+.dpi-input-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(100, 116, 139, 0.4);
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+  user-select: none;
+  outline: none;
+  direction: rtl;
+  position: relative;
+}
+
+.dpi-input-box:hover:not(.dpi-input-box--disabled) {
+  border-color: rgba(212, 175, 55, 0.4);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.dpi-input-box:focus:not(.dpi-input-box--disabled) {
+  border-color: rgba(212, 175, 55, 0.6);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+}
+
+.dpi-input-box--open {
+  border-color: rgba(212, 175, 55, 0.7) !important;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15) !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+
+.dpi-input-box--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ─── أيقونة التقويم ──────────────────────────────────────────────────────── */
+.dpi-input-icon {
+  width: 16px;
+  height: 16px;
+  color: #64748b;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.dpi-input-icon--active {
+  color: #d4af37;
+}
+
+/* ─── نص العرض ────────────────────────────────────────────────────────────── */
+.dpi-input-text {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-sans);
+}
+
+.dpi-input-placeholder {
+  color: #475569;
+  font-weight: 600;
+}
+
+/* ─── زر المسح ────────────────────────────────────────────────────────────── */
+.dpi-clear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(100, 116, 139, 0.15);
+  color: #64748b;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.dpi-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+/* ─── النافذة المنبثقة ────────────────────────────────────────────────────── */
+.dpi-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 9999;
+  background: #0d0d0f;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 12px;
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(212, 175, 55, 0.05),
+    0 8px 16px rgba(0, 0, 0, 0.4);
+  min-width: 220px;
+  overflow: hidden;
+  animation: dpi-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  direction: rtl;
+}
+
+@keyframes dpi-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ─── التبويبات (لوضع datetime-local) ────────────────────────────────────── */
+.dpi-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.12);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dpi-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+  font-family: var(--font-sans);
+}
+
+.dpi-tab:hover {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dpi-tab--active {
+  color: #d4af37;
+  background: rgba(212, 175, 55, 0.06);
+  box-shadow: inset 0 -2px 0 #d4af37;
+}
+
+.dpi-tab-badge {
+  background: rgba(212, 175, 55, 0.15);
+  color: #e7c75d;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+/* ─── لوحة التقويم ────────────────────────────────────────────────────────── */
+.dpi-cal-panel {
+  padding: 8px;
+}
+
+.dpi-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 4px;
+}
+
+.dpi-cal-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dpi-cal-nav-btn:hover {
+  border-color: rgba(212, 175, 55, 0.4);
+  color: #d4af37;
+  background: rgba(212, 175, 55, 0.06);
+}
+
+.dpi-cal-title-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #e2e8f0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.dpi-cal-title-btn:hover {
+  background: rgba(212, 175, 55, 0.08);
+  color: #d4af37;
+}
+
+/* ─── أسماء أيام الأسبوع ──────────────────────────────────────────────────── */
+.dpi-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.dpi-weekday {
+  text-align: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: #475569;
+  padding: 2px 0;
+  font-family: var(--font-sans);
+}
+
+/* ─── شبكة أيام الشهر ─────────────────────────────────────────────────────── */
+.dpi-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.dpi-day-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 22px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.dpi-day-btn:hover:not(.dpi-day-btn--disabled):not(.dpi-day-btn--selected) {
+  background: rgba(212, 175, 55, 0.08);
+  color: #e7c75d;
+  border-color: rgba(212, 175, 55, 0.2);
+}
+
+.dpi-day-btn--today {
+  color: #d4af37;
+  border-color: rgba(212, 175, 55, 0.3);
+  font-weight: 800;
+}
+
+.dpi-day-btn--selected {
+  background: #d4af37 !important;
+  color: #0d0d0f !important;
+  font-weight: 900 !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.4);
+}
+
+.dpi-day-btn--disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ─── تذييل التقويم ───────────────────────────────────────────────────────── */
+.dpi-cal-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(100, 116, 139, 0.1);
+}
+
+.dpi-today-btn {
+  font-size: 10px;
+  font-weight: 800;
+  color: #d4af37;
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.dpi-today-btn:hover {
+  background: rgba(212, 175, 55, 0.15);
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
+/* ─── شبكة اختيار السنة ───────────────────────────────────────────────────── */
+.dpi-year-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.dpi-year-btn {
+  padding: 5px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.dpi-year-btn:hover {
+  background: rgba(212, 175, 55, 0.08);
+  color: #e7c75d;
+  border-color: rgba(212, 175, 55, 0.2);
+}
+
+.dpi-year-btn--active {
+  background: #d4af37 !important;
+  color: #0d0d0f !important;
+  font-weight: 900 !important;
+}
+
+/* ─── لوحة اختيار الوقت ───────────────────────────────────────────────────── */
+.dpi-time-panel {
+  padding: 8px;
+}
+
+.dpi-time-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  margin-bottom: 8px;
+  font-family: var(--font-sans);
+}
+
+.dpi-time-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  justify-content: center;
+}
+
+.dpi-scroll-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.dpi-scroll-title {
+  font-size: 9px;
+  font-weight: 800;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--font-sans);
+}
+
+.dpi-scroll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 120px;
+  overflow-y: auto;
+  width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(212, 175, 55, 0.3) transparent;
+}
+
+.dpi-scroll-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-family: var(--font-mono);
+  width: 100%;
+}
+
+.dpi-scroll-item:hover:not(.dpi-scroll-item--active) {
+  background: rgba(212, 175, 55, 0.06);
+  color: #e7c75d;
+  border-color: rgba(212, 175, 55, 0.15);
+}
+
+.dpi-scroll-item--active {
+  background: rgba(212, 175, 55, 0.15);
+  color: #d4af37;
+  border-color: rgba(212, 175, 55, 0.3);
+  font-weight: 900;
+}
+
+.dpi-time-colon {
+  font-size: 14px;
+  font-weight: 900;
+  color: #475569;
+  padding-top: 18px;
+  font-family: var(--font-mono);
+}
+
+.dpi-ampm-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.dpi-ampm-btn {
+  padding: 4px 4px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  background: transparent;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-family: var(--font-sans);
+}
+
+.dpi-ampm-btn:hover:not(.dpi-ampm-btn--active) {
+  background: rgba(212, 175, 55, 0.06);
+  color: #e7c75d;
+  border-color: rgba(212, 175, 55, 0.2);
+}
+
+.dpi-ampm-btn--active {
+  background: rgba(212, 175, 55, 0.18);
+  color: #d4af37;
+  border-color: rgba(212, 175, 55, 0.4);
+  font-weight: 900;
+}
+
+/* ─── تذييل النافذة المنبثقة ──────────────────────────────────────────────── */
+.dpi-popup-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 5px 8px 6px;
+  border-top: 1px solid rgba(212, 175, 55, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.dpi-confirm-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #0d0d0f;
+  background: linear-gradient(135deg, #d4af37, #b8960c);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+}
+
+.dpi-confirm-btn:hover {
+  background: linear-gradient(135deg, #e7c75d, #d4af37);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
+  transform: translateY(-1px);
+}
+
+/* ─── وضع الضوء Light Mode ────────────────────────────────────────────────── */
+.light-mode .dpi-input-box {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.light-mode .dpi-input-box:hover:not(.dpi-input-box--disabled) {
+  border-color: rgba(212, 175, 55, 0.6);
+  background: #ffffff;
+}
+
+.light-mode .dpi-input-box--open {
+  background: #ffffff !important;
+}
+
+.light-mode .dpi-input-text {
+  color: #111827;
+}
+
+.light-mode .dpi-input-placeholder {
+  color: #9ca3af;
+}
+
+.light-mode .dpi-input-icon {
+  color: #9ca3af;
+}
+
+.light-mode .dpi-popup {
+  background: #ffffff;
+  border-color: rgba(212, 175, 55, 0.3);
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.15),
+    0 8px 16px rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .dpi-cal-title-btn {
+  color: #111827;
+}
+
+.light-mode .dpi-day-btn {
+  color: #374151;
+}
+
+.light-mode .dpi-weekday {
+  color: #9ca3af;
+}
+
+.light-mode .dpi-tabs {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.light-mode .dpi-tab {
+  color: #6b7280;
+}
+
+.light-mode .dpi-tab--active {
+  color: #b08120;
+}
+
+.light-mode .dpi-cal-nav-btn {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+  color: #6b7280;
+}
+
+.light-mode .dpi-scroll-item {
+  color: #6b7280;
+}
+
+.light-mode .dpi-time-panel {
+  background: transparent;
+}
+
+.light-mode .dpi-popup-footer {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+/* ─── الاستجابة للشاشات الصغيرة ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .dpi-popup {
+    min-width: 220px;
+    right: auto;
+    left: 0;
   }
 }

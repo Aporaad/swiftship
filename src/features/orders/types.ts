@@ -40,7 +40,7 @@ export interface OrderFormData {
   trackingNumber: string;
   addShippingEnabled: boolean;
   shippingCompany: string;
-
+  homeDeliveryEnabled: boolean;
   // روابط المناديب - Courier Links
   shippingCourierId: string;
   shippingCourierFeeRate: number;

@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
 import { CurrencySelect, toCurrencySelectOptions } from '../common/CurrencySelect';
 import { AlertTriangle, ArrowLeft, ArrowRight, Save, Trash2, Plus } from 'lucide-react';
+import { DatePickerInput } from '../common/DatePickerInput';
 import {
   financialEntryService,
   type FinancialEntryCategory,
@@ -772,12 +773,13 @@ export default function EntryForm({
             ) : detail.paymentMethod === 'deferred' ? (
               <label className="text-[11px] font-bold text-slate-400 md:col-span-2">
                 تاريخ الاستحقاق
-                <input
-                  type="datetime-local"
-                  value={detail.dueAt}
-                  onChange={(e) => updatePaymentDetail(index, { dueAt: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-900 p-2 text-xs text-white"
-                />
+                <div className="mt-1">
+                  <DatePickerInput
+                    type="datetime-local"
+                    value={detail.dueAt}
+                    onChange={(val) => updatePaymentDetail(index, { dueAt: val })}
+                  />
+                </div>
               </label>
             ) : <div className="md:col-span-2" />}
 
